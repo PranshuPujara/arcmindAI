@@ -41,8 +41,13 @@ const LoginInFormContent = () => {
         setError(result.error);
         return;
       }
-      if (result.url) router.push(result.url);
-      else router.push(DOC_ROUTES.HOME);
+      if (result.url) {
+        // Ensure we use a relative path if possible, or the returned URL
+        const url = new URL(result.url, window.location.origin);
+        router.push(url.pathname + url.search);
+      } else {
+        router.push(DOC_ROUTES.HOME);
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to sign in. Please try again.");
