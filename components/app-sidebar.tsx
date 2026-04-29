@@ -153,7 +153,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       ) => (
                         <SidebarMenuItem key={index}>
                           {item.isLoading ? (
-                            <HistorySideBarSkeleton/>
+                            <HistorySideBarSkeleton />
                           ) : (
                             <SidebarMenuButton asChild isActive={item.isActive}>
                               <Link href={item.url}>{item.title}</Link>
