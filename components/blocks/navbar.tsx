@@ -14,6 +14,7 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { DOC_ROUTES } from "@/lib/routes";
@@ -152,7 +153,9 @@ export const Navbar = () => {
 
         {/* Auth Buttons */}
         <div className="flex items-center gap-2.5">
-          {isAuthenticated ? (
+          {status === "loading" ? (
+            <Skeleton className="h-8 w-8 rounded-full" />
+          ) : isAuthenticated ? (
             <NavigationMenu>
               <NavigationMenuList>
                 <NavigationMenuItem>
