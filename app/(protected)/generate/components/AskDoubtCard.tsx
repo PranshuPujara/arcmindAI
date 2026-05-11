@@ -40,8 +40,7 @@ export default function AskDoubtCard({
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loadedGenerationIdRef = useRef<string | null>(null);
-  const { askDoubt, isLoading, error } =
-    useAskDoubt();
+  const { askDoubt, isLoading, error } = useAskDoubt();
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [doubtChatCount, setDoubtChatCount] = useState<number>(0);
   const [limitReached, setLimitReached] = useState<boolean>(false);

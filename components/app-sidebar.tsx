@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { HistorySideBarSkeleton } from "./main/historySideBar";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useHistory } from "@/lib/contexts/HistoryContext";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -46,7 +47,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const { getUser } = useGetUser();
 
@@ -174,50 +175,57 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Button
-                    variant="ghost"
-                    className="cursor-pointer w-full justify-start"
-                    asChild
-                  >
-                    <Link
-                      href={DOC_ROUTES.PROFILE.ROOT}
-                      className="flex items-center"
+                {status === "loading" ? (
+                  <div className="flex items-center w-full px-2 py-1.5">
+                    <Skeleton className="h-6 w-6 rounded-full mr-2" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                ) : (
+                  <SidebarMenuButton asChild>
+                    <Button
+                      variant="ghost"
+                      className="cursor-pointer w-full justify-start"
+                      asChild
                     >
-                      <div
-                        className={cn(
-                          "relative w-6 h-6 aspect-square rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium mr-2",
-                          user?.plan === "custom" && "ring-1 ring-yellow-500",
-                        )}
+                      <Link
+                        href={DOC_ROUTES.PROFILE.ROOT}
+                        className="flex items-center"
                       >
-                        {user?.avatar ? (
-                          <Image
-                            src={user.avatar}
-                            alt="avatar"
-                            width={24}
-                            height={24}
-                            className="rounded-full object-cover w-6 h-6"
-                          />
-                        ) : (
-                          <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-black text-xs font-bold uppercase">
-                            {session?.user?.name?.charAt(0).toUpperCase() ||
-                              "U"}
+                        <div
+                          className={cn(
+                            "relative w-6 h-6 aspect-square rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium mr-2",
+                            user?.plan === "custom" && "ring-1 ring-yellow-500",
+                          )}
+                        >
+                          {user?.avatar ? (
+                            <Image
+                              src={user.avatar}
+                              alt="avatar"
+                              width={24}
+                              height={24}
+                              className="rounded-full object-cover w-6 h-6"
+                            />
+                          ) : (
+                            <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-black text-xs font-bold uppercase">
+                              {session?.user?.name?.charAt(0).toUpperCase() ||
+                                "U"}
+                            </span>
+                          )}
+                          {user?.plan === "pro" && (
+                            <span className="absolute -top-0.5 -right-0.5 bg-yellow-500 text-white text-[5px] border-black px-1 py-0.5 rounded">
+                              PRO
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col text-left">
+                          <span className="text-sm font-medium">
+                            {session?.user?.name || "User"}
                           </span>
-                        )}
-                        {user?.plan === "pro" && (
-                          <span className="absolute -top-0.5 -right-0.5 bg-yellow-500 text-white text-[5px] border-black px-1 py-0.5 rounded">
-                            PRO
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col text-left">
-                        <span className="text-sm font-medium">
-                          {session?.user?.name || "User"}
-                        </span>
-                      </div>
-                    </Link>
-                  </Button>
-                </SidebarMenuButton>
+                        </div>
+                      </Link>
+                    </Button>
+                  </SidebarMenuButton>
+                )}
               </SidebarMenuItem>
               <Dialog
                 open={isLogoutDialogOpen}
