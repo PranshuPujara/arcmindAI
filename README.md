@@ -248,6 +248,15 @@ After generating a system design (either from natural language or GitHub import)
 - `pnpm prisma:generate` - Generate Prisma Client
 - `pnpm prisma:push` - Push schema changes to database
 
+## Development Workflow
+
+This project uses **Husky** and **lint-staged** to ensure code quality. A pre-commit hook automatically runs:
+
+1. **ESLint** with `--fix` to catch and fix linting errors.
+2. **Prettier** to ensure consistent code formatting.
+
+This happens automatically whenever you run `git commit`. If there are unfixable errors, the commit will be blocked until they are resolved.
+
 ## Deployment
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
