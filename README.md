@@ -110,6 +110,10 @@ Required environment variables:
 - `UPSTASH_REDIS_REST_URL`: Upstash Redis REST API URL (for rate limiting)
 - `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST token
 
+**Request Limits:**
+
+- `API_BODY_LIMIT_BYTES`: Maximum allowed request body size in bytes for `/api/*` routes. Requests exceeding this limit receive HTTP 413. Optional — defaults to `768000` (750 KB) if unset or invalid.
+
 **Email & Media:**
 
 - `ADMIN_EMAIL`: Email of the admin (notifications, etc.)
