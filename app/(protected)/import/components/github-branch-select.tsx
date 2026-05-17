@@ -148,7 +148,7 @@ export function GitBranchSelect({
                     variant="ghost"
                     onClick={() => handleSelect(branch.name)}
                     className={cn(
-                      "group w-full justify-start h-auto py-1.5 px-3 rounded-none",
+                      "group w-full justify-start h-auto py-1.5 px-3 rounded-none transition-none",
                       "font-normal cursor-pointer border-b border-[#eaeef2] last:border-b-0",
                       "text-[#1f2328] hover:bg-[#0969da] hover:text-white text-left",
                     )}
