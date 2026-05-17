@@ -160,62 +160,64 @@ export default function GeneratePage() {
 
   return (
     <div className="container max-w-5xl mx-auto p-8 space-y-12">
-      <div className="space-y-4">
-        <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-border/50 to-border/50 rounded-2xl blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-focus-within:duration-200"></div>
-          <Card className="relative border-border/60 shadow-lg bg-card/50 backdrop-blur-xl rounded-2xl overflow-hidden">
-            <CardContent className="p-0">
-              <div className="p-4 flex flex-col space-y-3">
-                <Textarea
-                  ref={handleRef}
-                  placeholder="Describe the system architecture you want to generate..."
-                  {...restRegisterField}
-                  maxLength={MAX_INPUT_LENGTH}
-                  className="min-h-[120px] w-full bg-transparent border-none shadow-none focus-visible:ring-0 text-lg resize-none placeholder:text-muted-foreground/50 p-2"
-                />
+      {!generatedData && (
+        <div className="space-y-4">
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-border/50 to-border/50 rounded-2xl blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-focus-within:duration-200"></div>
+            <Card className="relative border-border/60 shadow-lg bg-card/50 backdrop-blur-xl rounded-2xl overflow-hidden">
+              <CardContent className="p-0">
+                <div className="p-4 flex flex-col space-y-3">
+                  <Textarea
+                    ref={handleRef}
+                    placeholder="Describe the system architecture you want to generate..."
+                    {...restRegisterField}
+                    maxLength={MAX_INPUT_LENGTH}
+                    className="min-h-[120px] w-full bg-transparent border-none shadow-none focus-visible:ring-0 text-lg resize-none placeholder:text-muted-foreground/50 p-2"
+                  />
 
-                <div className="flex items-center justify-between border-t border-border/40 pt-4 px-2">
-                  <div className="flex items-center gap-4">
-                    <p
-                      className={`text-xs transition-opacity duration-300 ${userInput.length > 0 ? "opacity-100" : "opacity-0"} ${counterColor}`}
+                  <div className="flex items-center justify-between border-t border-border/40 pt-4 px-2">
+                    <div className="flex items-center gap-4">
+                      <p
+                        className={`text-xs transition-opacity duration-300 ${userInput.length > 0 ? "opacity-100" : "opacity-0"} ${counterColor}`}
+                      >
+                        {userInput.length} / {MAX_INPUT_LENGTH}
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={handleGenerate}
+                      disabled={isLoading || !userInput.trim()}
+                      size="lg"
+                      className="rounded-xl px-6 transition-all duration-300 active:scale-95"
                     >
-                      {userInput.length} / {MAX_INPUT_LENGTH}
-                    </p>
+                      {isLoading ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                          Processing
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          Generate
+                        </>
+                      )}
+                    </Button>
                   </div>
-
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={isLoading || !userInput.trim()}
-                    size="lg"
-                    className="rounded-xl px-6 transition-all duration-300 active:scale-95"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
-                        Processing
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 mr-2" />
-                        Generate
-                      </>
-                    )}
-                  </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {!generatedData && !isLoading && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <StarterTemplates
-              onSelectTemplate={handleSelectTemplate}
-              isVisible={true}
-            />
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+
+          {!isLoading && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <StarterTemplates
+                onSelectTemplate={handleSelectTemplate}
+                isVisible={true}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <Card className="border-destructive/20 bg-destructive/5 rounded-2xl">
