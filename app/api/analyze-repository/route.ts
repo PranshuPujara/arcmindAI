@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: AnalyzeRepositoryRequest = await request.json();
-    const { owner, repo } = body;
+    const { owner, repo, branch } = body;
 
     if (!owner || !repo) {
       return NextResponse.json(
@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
           owner,
           repo,
           githubToken,
+          branch,
         );
         return await analyzer.analyze();
       },

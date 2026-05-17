@@ -1,12 +1,5 @@
 "use client";
 
-import { FileBrowser } from "./file-browser";
-import { Loader2 } from "lucide-react";
-import { useRouter, useParams } from "next/navigation";
-import { useGithubToken } from "../hooks/useGithubToken";
-import { useRepositoryAnalyzer } from "../hooks/useRepositoryAnalyzer";
-import { useGithubDesignGenerator } from "../hooks/useGithubDesignGenerator";
-import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,15 +9,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { MermaidViewer } from "./mermaid-viewer";
 import { DOC_ROUTES } from "@/lib/routes";
+import { Loader2 } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useGithubDesignGenerator } from "../hooks/useGithubDesignGenerator";
+import { useGithubToken } from "../hooks/useGithubToken";
+import { useRepositoryAnalyzer } from "../hooks/useRepositoryAnalyzer";
+import { FileBrowser } from "./file-browser";
+import { MermaidViewer } from "./mermaid-viewer";
 
 export function RepositoryPageClient() {
   const router = useRouter();
   const params = useParams();
   const owner = params.owner as string;
   const repo = params.repo as string;
+  const searchParams = useSearchParams();
+  const branch = searchParams.get("branch") ?? undefined;
 
   const { isConnected, loading } = useGithubToken();
   const {
@@ -82,7 +84,7 @@ export function RepositoryPageClient() {
 
     // Step 1: Analyze repository
     toast.info("Analyzing repository...");
-    await analyze(owner, repo);
+    await analyze(owner, repo, branch);
   }
 
   // Step 2: Generate design when analysis completes
