@@ -153,9 +153,7 @@ export default function GeneratePage() {
         : "text-muted-foreground/60";
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Show starter templates only before generation */}
-
+    <div className="container max-w-5xl mx-auto p-8 space-y-12">
       {!generatedData && (
         <div className="space-y-4">
           <div className="relative group">
