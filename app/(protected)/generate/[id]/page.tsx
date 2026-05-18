@@ -4,14 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Code2, Copy, Check, Sparkles } from "lucide-react";
-import { toast } from "sonner";
+import { Code2, Sparkles } from "lucide-react";
 import { useGetGenerationById } from "../hooks/useGetGenerationById";
 import { useDeleteGenerationById } from "../hooks/useDeleteGenerationById";
 import { useUpdateGeneration } from "@/hooks/useUpdateGeneration";

@@ -3,13 +3,7 @@
 import { useGenerateSystem } from "../hooks/useGenerateSystem";
 import { useHistory } from "@/lib/contexts/HistoryContext";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
