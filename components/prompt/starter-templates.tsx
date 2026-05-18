@@ -20,14 +20,14 @@ export default function StarterTemplates({
   }
 
   return (
-    <div className="w-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg p-4 border border-blue-200/50 dark:border-blue-800/50">
-      <div className="mb-3 flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+    <div className="w-full bg-card/50 rounded-xl p-6 border border-border/50">
+      <div className="mb-4 flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-muted-foreground" />
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Quick Start Templates
         </p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {templates.map((template) => (
           <TemplateCard
             key={template.id}

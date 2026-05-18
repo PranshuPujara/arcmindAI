@@ -16,14 +16,14 @@ export default function TemplateCard({
   return (
     <Button
       variant="outline"
-      className="h-auto flex flex-col items-start gap-1.5 p-3 text-left text-xs overflow-hidden transition-all duration-200 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-sm"
+      className="h-auto w-full flex flex-col items-start gap-1.5 p-4 text-left transition-all duration-300 hover:bg-accent hover:text-accent-foreground border-border/60 hover:border-border rounded-xl shadow-none whitespace-normal overflow-hidden"
       onClick={onSelect}
     >
-      <div className="font-semibold text-xs leading-snug line-clamp-2 break-words text-gray-900 dark:text-gray-100">
+      <div className="font-semibold text-[13px] leading-tight line-clamp-2 w-full">
         {template.title}
       </div>
       {template.description && (
-        <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1 break-words w-full truncate">
+        <div className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed w-full">
           {template.description}
         </div>
       )}
