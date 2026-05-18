@@ -1,4 +1,3 @@
-import { arch } from "node:os";
 import { HttpMethod, MarkdownExportInput } from "./export-markdown";
 import { ArchitectureData } from "./types";
 

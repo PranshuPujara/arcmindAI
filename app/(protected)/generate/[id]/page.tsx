@@ -57,6 +57,7 @@ export default function GenerationPage() {
     null,
   );
   const [githubGeneration, setGithubGeneration] = useState<string | null>(null);
+  const [systemName, setSystemName] = useState<string>("");
   const [isGithubRepo, setIsGithubRepo] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
@@ -77,6 +78,7 @@ export default function GenerationPage() {
       if (id && typeof id === "string") {
         const result = await getGenerationById(id);
         if (result && result.success) {
+          setSystemName(result.output.userInput || "");
           if (result.output.githubGeneration) {
             setGithubGeneration(result.output.githubGeneration);
             setIsGithubRepo(true);
@@ -211,12 +213,24 @@ export default function GenerationPage() {
             <p className="text-gray-600 mb-4">
               System architecture generated from GitHub repository analysis
             </p>
-            <DeleteDialog
-              open={isDeleteDialogOpen}
-              onOpenChange={setIsDeleteDialogOpen}
-              onDelete={handleDelete}
-              isDeleting={isDeleting}
-            />
+            <div className="flex flex-wrap gap-4">
+              <Button
+                variant="outline"
+                className="h-10 px-6 rounded-xl border-border/60 hover:border-border bg-card/50 transition-all duration-300 shadow-sm"
+                onClick={() =>
+                  downloadMarkdownFile(githubGeneration, systemName)
+                }
+              >
+                <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+                Export Markdown
+              </Button>
+              <DeleteDialog
+                open={isDeleteDialogOpen}
+                onOpenChange={setIsDeleteDialogOpen}
+                onDelete={handleDelete}
+                isDeleting={isDeleting}
+              />
+            </div>
           </CardContent>
         </Card>
 

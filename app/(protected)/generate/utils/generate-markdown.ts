@@ -231,11 +231,23 @@ function getTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
-export function downloadMarkdownFile(architecture: ArchitectureData): void {
-  const markdownInput = mapArchitectureToMarkdownInput(architecture);
-  const markdown = generateMarkdown(markdownInput);
+export function downloadMarkdownFile(
+  data: ArchitectureData | string,
+  title?: string,
+): void {
+  let markdown: string;
+  let finalTitle: string;
 
-  const slug = slugify(markdownInput.title || "architecture");
+  if (typeof data === "string") {
+    finalTitle = title || "GitHub Repository Design";
+    markdown = `# ${finalTitle}\n\n## Architecture Diagram\n\n\`\`\`mermaid\n${data}\n\`\`\``;
+  } else {
+    const markdownInput = mapArchitectureToMarkdownInput(data);
+    markdown = generateMarkdown(markdownInput);
+    finalTitle = markdownInput.title || "architecture";
+  }
+
+  const slug = slugify(finalTitle);
   const timestamp = getTimestamp();
 
   const fileName = `${slug}-${timestamp}.md`;
