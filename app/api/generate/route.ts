@@ -9,9 +9,9 @@ import {
   aiGenerationRequestsTotal,
   aiGenerationSuccessTotal,
   aiGenerationFailureTotal,
-  aiGenerationDurationSeconds,
+  aiGenerationDurationSeconds, 
   aiGenerationOutputSizeBytes,
-  userGenerationsTotal,
+  userGenerationsTotal, 
   userLastActivityTimestamp, 
   httpRequestsTotal,
   httpRequestDurationSeconds,
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
       .map((item: any) => {
         if (typeof item === "string") return item;
         if (item?.text) return item.text;
-        return "";
+        return ""; 
       })
       .join("");
   } else if (chunk.content) {

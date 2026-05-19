@@ -8,14 +8,25 @@ import { db } from "@/lib/prisma";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { streamGeminiWithFallback } from "@/app/(protected)/generate/utils/aiClient";
 import { getUserApiKeys } from "@/lib/api-keys/getUserApiKeys";
+import {
+  aiGenerationFailureTotal,
+  databaseQueryDurationSeconds,
+  httpRequestsTotal,
+} from "@/lib/metrics";
 
 interface GenerateGithubDesignRequest { 
   owner: string;
   repo: string;
   analysisData: RepositoryAnalysis;
-} 
+  branch?: string; 
+}
 
 export async function POST(request: NextRequest) {
+  const route = "/api/generate-github-design";
+  const method = "POST"; 
+  let aiRequested = false;  
+  let aiFailureRecorded = false;
+
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
@@ -23,6 +34,7 @@ export async function POST(request: NextRequest) {
     const userId = session?.user?.id;
 
     if (!userId) {
+      httpRequestsTotal.inc({ route, method, status_code: "401" });
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },
@@ -30,9 +42,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body: GenerateGithubDesignRequest = await request.json();
-    const { owner, repo, analysisData } = body;
+    const { owner, repo, branch, analysisData } = body;
 
     if (!owner || !repo || !analysisData) {
+      httpRequestsTotal.inc({ route, method, status_code: "400" });
       return NextResponse.json(
         {
           success: false,
@@ -43,7 +56,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if a design already exists for this repository
-    const repoIdentifier = `${owner}/${repo}`;
+    const repoIdentifier = branch
+      ? `${owner}/${repo}:${branch}`
+      : `${owner}/${repo}`;
+    const dbFindStart = Date.now();
     const existingGeneration = await db.generation.findFirst({
       where: {
         userId: userId,
@@ -56,6 +72,10 @@ export async function POST(request: NextRequest) {
         createdAt: "desc", // Get the most recent one
       },
     });
+    databaseQueryDurationSeconds.observe(
+      { operation: "findFirst" },
+      (Date.now() - dbFindStart) / 1000,
+    );
 
     // // If design already exists, return it from cache
     // if (existingGeneration?.githubGeneration) {
@@ -108,10 +128,7 @@ export async function POST(request: NextRequest) {
     // 🔑 Fetch user's API keys
     const userApiKeys = await getUserApiKeys(userId);
 
-    // const { response } = await invokeGeminiWithFallback(
-    //   messages,
-    //   userApiKeys.geminiApiKey,
-    // );
+    aiRequested = true; 
 
     // streaming version
      const responseStream = await streamGeminiWithFallback(
@@ -197,7 +214,11 @@ return new Response(readable, {
     // });
 
   } catch (error) {
+    if (aiRequested && !aiFailureRecorded) {
+      aiGenerationFailureTotal.inc();
+    }
     console.error("GitHub design generation error:", error);
+    httpRequestsTotal.inc({ route, method, status_code: "500" });
     return NextResponse.json(
       {
         success: false,
@@ -209,4 +230,4 @@ return new Response(readable, {
       { status: 500 }
     );
   }  
-} 
+}  

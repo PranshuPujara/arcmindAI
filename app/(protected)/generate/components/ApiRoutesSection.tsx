@@ -3,12 +3,12 @@ import { ArchitectureData } from "../utils/types";
 
 interface ApiRoutesSectionProps {
   apiRoutes?: ArchitectureData["apiRoutes"];
-}
+} 
 
 export default function ApiRoutesSection({ apiRoutes = [], }: ApiRoutesSectionProps) {
   return (
     <div className="space-y-6">
-      {apiRoutes?.map((serviceRoutes, index) => (
+      {apiRoutes?.map((serviceRoutes, index) => ( 
         <div key={index}>
           <h3 className="text-xl font-semibold mb-4"> 
             {serviceRoutes.service}
