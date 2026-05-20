@@ -4,12 +4,19 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Code2, Download, Sparkles } from "lucide-react";
+import { Code2, Download, Info, Sparkles } from "lucide-react";
 import { useGetGenerationById } from "../hooks/useGetGenerationById";
 import { useDeleteGenerationById } from "../hooks/useDeleteGenerationById";
 import { useUpdateGeneration } from "@/hooks/useUpdateGeneration";
 import { useHistory } from "@/lib/contexts/HistoryContext";
 import { downloadMarkdownFile } from "../utils/generate-markdown";
+import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import {
   MermaidDiagram,
@@ -107,50 +114,63 @@ export default function GenerationPage() {
     if (!id || typeof id !== "string" || !responseText.trim()) return;
 
     if (isGithubRepo) {
-      alert("Updates are not yet supported for GitHub repository designs.");
+      toast.info(
+        "Updates are not yet supported for GitHub repository designs.",
+      );
       return;
     }
 
     const result = await updateGeneration(id, responseText);
     if (result && result.success) {
-      const updatedResult = await getGenerationById(id);
-      if (updatedResult && updatedResult.success) {
-        const data = updatedResult.output.generatedOutput as ArchitectureData;
-        setGeneratedData(data);
-      }
+      // @ts-expect-error output is the updated generation object
+      const data = result.output.generatedOutput as ArchitectureData;
+      setGeneratedData(data);
+      toast.success("Generation updated successfully");
+      refetch();
       setResponseText("");
       setIsActionDialogOpen(false);
     } else {
       console.error("Failed to update generation:", updateError);
+      toast.error(updateError || "Failed to update generation");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || typeof id !== "string") return;
+
+    const result = await deleteGeneration(id);
+    if (result && result.success) {
+      toast.success("Generation deleted successfully");
+      refetch();
+      router.push(DOC_ROUTES.GENERATE);
+    } else {
+      toast.error(deleteError || "Failed to delete generation");
     }
   };
 
   const handleShare = async () => {
-  if (!id || typeof id !== "string") return;
+    if (!id || typeof id !== "string") return;
 
-  try {
-
-    const response = await fetch(`/api/generate/${id}`, {
-  method: "PATCH",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    userId: "temp-user",
-  }),
-});
-    const data = await response.json();
-    if (data.success) {
-      const shareUrl =
-        `${window.location.origin}/share/${data.shareId}`
-      await navigator.clipboard.writeText(shareUrl);
-      window.open(shareUrl, "_blank");
+    try {
+      const response = await fetch(`/api/generate/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        const shareUrl = `${window.location.origin}/share/${data.shareId}`;
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Share link copied to clipboard!");
+      } else {
+        toast.error(data.message || "Failed to share generation");
+      }
+    } catch (error) {
+      console.error("Share failed:", error);
+      toast.error("An error occurred while sharing");
     }
-  } catch (error) {
-    console.error("Share failed:", error);
-  }
-
-};
+  };
 
   if (isLoading) {
     return (
@@ -268,10 +288,6 @@ export default function GenerationPage() {
     generatedData["Architecture Diagram"],
   );
 
-  function handleDelete(): void {
-    throw new Error("Function not implemented.");
-  }
-
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <ActionDialog
@@ -358,22 +374,32 @@ export default function GenerationPage() {
               <Code2 className="mr-2 h-4 w-4 text-muted-foreground" />
               Task Generation
             </Button>
-           <Button
-  variant="outline"
-  className="h-10 px-6 rounded-xl border-border/60 hover:border-border bg-card/50 transition-all duration-300"
-  onClick={handleShare}
->
-  Share
-</Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-6 rounded-xl border-border/60 hover:border-border bg-card/50 transition-all duration-300"
+                    onClick={handleShare}
+                  >
+                    <Info className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Share
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Copy public share link to clipboard</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-<Button
-  variant="outline"
-  className="h-10 px-6 rounded-xl border-border/60 hover:border-border bg-card/50 transition-all duration-300 shadow-sm"
-  onClick={() => downloadMarkdownFile(generatedData)}
->
-  <Download className="mr-2 h-4 w-4 text-muted-foreground" />
-  Export Markdown
-</Button>
+            <Button
+              variant="outline"
+              className="h-10 px-6 rounded-xl border-border/60 hover:border-border bg-card/50 transition-all duration-300 shadow-sm"
+              onClick={() => downloadMarkdownFile(generatedData)}
+            >
+              <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+              Export Markdown
+            </Button>
             <DeleteDialog
               open={isDeleteDialogOpen}
               onOpenChange={setIsDeleteDialogOpen}

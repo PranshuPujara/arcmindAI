@@ -360,25 +360,21 @@ export async function POST(req: NextRequest) {
 }
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
-
   try {
     const body = await req.json();
-const { userId } = body;
+    const { userId } = body;
 
-if (!userId) {
-  return NextResponse.json(
-    { error: "Unauthorized" },
-    { status: 401 }
-  );
-}
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const updatedGeneration = await db.generation.update({
       where: {
-           id: params.id,
-           userId,
-        },
+        id: params.id,
+        userId,
+      },
 
       data: {
         isPublic: true,
@@ -390,16 +386,12 @@ if (!userId) {
       success: true,
       shareId: updatedGeneration.shareId,
     });
-
   } catch (error) {
-
     console.error(error);
 
     return NextResponse.json(
       { error: "Failed to share generation" },
-      { status: 500 }
+      { status: 500 },
     );
-
   }
-
 }
