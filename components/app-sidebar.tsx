@@ -139,6 +139,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
     ],
   };
+  const wrapMenuItemClassName =
+    "h-auto items-start whitespace-normal break-words leading-snug";
 
   return (
     <Sidebar variant="floating" {...props}>
@@ -218,7 +220,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           {item.isLoading ? (
                             <HistorySideBarSkeleton />
                           ) : (
-                            <SidebarMenuButton asChild isActive={item.isActive}>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={item.isActive}
+                              className={wrapMenuItemClassName}
+                            >
                               {item.title === "New Chat" ? (
                                 <a href={item.url}>{item.title}</a>
                               ) : (
@@ -247,7 +253,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <Skeleton className="h-4 w-24" />
                   </div>
                 ) : (
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild className={wrapMenuItemClassName}>
                     <Button
                       variant="ghost"
                       className="cursor-pointer w-full justify-start"
@@ -255,7 +261,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     >
                       <Link
                         href={DOC_ROUTES.PROFILE.ROOT}
-                        className="flex items-center"
+                        className="flex items-start"
                       >
                         <div
                           className={cn(
