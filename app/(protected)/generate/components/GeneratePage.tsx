@@ -1,4 +1,5 @@
 "use client";
+import ExportPDFButton from "./ExportPDFButton";
 
 import animationData from "@/components/loaderLottie.json";
 import { StarterTemplates } from "@/components/prompt";
@@ -8,13 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { ArchitectureData } from "../utils/types";
+import { useGenerateSystem } from "../hooks/useGenerateSystem";
 
 import { useHistory } from "@/lib/contexts/HistoryContext";
 import Lottie from "lottie-react";
 import { AlertCircle, RotateCw, Send, Sparkles } from "lucide-react";
-
-import { useGenerateSystem } from "../hooks/useGenerateSystem";
-
+import { useRateLimitCountdown } from "@/hooks/use-rate-limit-countdown";
+import { RateLimitBanner } from "@/components/rate-limit-banner";
 import { cleanMermaidString } from "../utils/cleanMermaidString";
 
 import ApiRoutesSection from "./ApiRoutesSection";
@@ -31,15 +32,20 @@ export default function GeneratePage() {
     generate,
     isLoading,
     error: generateError,
+    retryAfter,
   } = useGenerateSystem(refetch);
 
+  const { secondsLeft, totalSeconds, isRateLimited, startCountdown } =
+    useRateLimitCountdown();
   const { register, watch, setValue } = useForm();
   const [generatedData, setGeneratedData] = useState<ArchitectureData | null>(
     null,
   );
   const [streamingProgress, setStreamingProgress] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const submittedTextRef = useRef<string>("");
 
   const userInput = watch("userInput", "");
@@ -75,18 +81,18 @@ export default function GeneratePage() {
 
   const handleRef = (el: HTMLTextAreaElement | null) => {
     textareaRef.current = el;
-    if (registerField.ref) {
-      if (typeof registerField.ref === "function") {
-        registerField.ref(el);
-      } else if ("current" in registerField.ref) {
+    if (registerRef) {
+      if (typeof registerRef === "function") {
+        registerRef(el);
+      } else if ("current" in registerRef) {
         (
-          registerField.ref as React.MutableRefObject<HTMLTextAreaElement | null>
+          registerRef as React.MutableRefObject<HTMLTextAreaElement | null>
         ).current = el;
       }
     }
   };
 
-  const { ref, ...restRegisterField } = registerField;
+  const { ref: registerRef, ...restRegisterField } = registerField;
 
   const MAX_INPUT_LENGTH = 2000;
 
@@ -99,21 +105,26 @@ export default function GeneratePage() {
     setStreamingProgress("");
     setIsStreaming(true);
 
+    if (isRateLimited) return;
+
+    submittedTextRef.current = userInput;
+
     try {
       const result = await generate(userInput, (chunk: string) => {
-        // Update streaming progress in real-time
         setStreamingProgress((prev) => prev + chunk);
       });
 
-      // 👇 ADD THESE DEBUG LOGS RIGHT HERE
+      if (retryAfter !== null) {
+        startCountdown(retryAfter);
+      }
+
       console.log("FULL RESULT:", result);
       console.log("output:", result?.output);
-      console.log("length:", result?.output?.length ?? 0);
-      submittedTextRef.current = userInput;
 
       if (result && result.success) {
         try {
           let cleanedOutput = result.output;
+
           const jsonStartMarker = "```json";
           const jsonStart = cleanedOutput.indexOf(jsonStartMarker);
 
@@ -121,45 +132,50 @@ export default function GeneratePage() {
             cleanedOutput = cleanedOutput.slice(
               jsonStart + jsonStartMarker.length,
             );
+
             const jsonEnd = cleanedOutput.indexOf("```");
+
             if (jsonEnd !== -1) {
               cleanedOutput = cleanedOutput.slice(0, jsonEnd);
             }
           } else {
             const firstBrace = cleanedOutput.indexOf("{");
+
             if (firstBrace !== -1) {
               let braceCount = 0;
               let lastBrace = -1;
+
               for (let i = firstBrace; i < cleanedOutput.length; i++) {
                 if (cleanedOutput[i] === "{") braceCount++;
+
                 if (cleanedOutput[i] === "}") {
                   braceCount--;
+
                   if (braceCount === 0) {
                     lastBrace = i;
                     break;
                   }
                 }
               }
+
               if (lastBrace !== -1) {
                 cleanedOutput = cleanedOutput.slice(firstBrace, lastBrace + 1);
               }
             }
           }
+
           cleanedOutput = cleanedOutput.trim();
 
           if (!cleanedOutput) {
             throw new Error("No JSON content found in AI response.");
           }
 
-          // const parsedData: ArchitectureData = JSON.parse(cleanedOutput);
-          // setGeneratedData(parsedData);
           console.log("FINAL OUTPUT:", cleanedOutput);
 
           const parsedData: ArchitectureData = JSON.parse(cleanedOutput);
 
           console.log("PARSED DATA:", parsedData);
 
-          setGeneratedData(parsedData);
           const mermaidStartMarker = "```mermaid";
           const mermaidStart = result.output.indexOf(mermaidStartMarker);
 
@@ -167,14 +183,18 @@ export default function GeneratePage() {
             let mermaidText = result.output.slice(
               mermaidStart + mermaidStartMarker.length,
             );
+
             const mermaidEnd = mermaidText.indexOf("```");
+
             if (mermaidEnd !== -1) {
               mermaidText = mermaidText.slice(0, mermaidEnd);
             }
+
             mermaidText = mermaidText
               .replace(/```mermaid/g, "")
               .replace(/```/g, "")
               .trim();
+
             if (mermaidText) {
               parsedData["Architecture Diagram"] = mermaidText;
             }
@@ -183,12 +203,15 @@ export default function GeneratePage() {
           setGeneratedData(parsedData);
         } catch (parseError) {
           console.error("Failed to parse generated data:", parseError);
+
           setGeneratedData(null);
         }
       } else {
-        setIsStreaming(false);
         setGeneratedData(null);
       }
+    } catch (error) {
+      console.error("Generation failed:", error);
+      setGeneratedData(null);
     } finally {
       setIsStreaming(false);
     }
@@ -229,7 +252,7 @@ export default function GeneratePage() {
 
                     <Button
                       onClick={() => handleGenerate()}
-                      disabled={isLoading || !userInput.trim()}
+                      disabled={isLoading || !userInput.trim() || isRateLimited}
                       size="lg"
                       className="rounded-xl px-6 transition-all duration-300 active:scale-95"
                     >
@@ -267,7 +290,14 @@ export default function GeneratePage() {
         </div>
       )}
 
-      {showError && (
+      {isRateLimited && (
+        <RateLimitBanner
+          secondsLeft={secondsLeft!}
+          totalSeconds={totalSeconds!}
+        />
+      )}
+
+      {showError && !isRateLimited && (
         <Card className="border-destructive/20 bg-destructive/5 rounded-2xl">
           <CardContent className="p-6 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
@@ -341,6 +371,119 @@ export default function GeneratePage() {
                 {generatedData.summary}
               </p>
             </div>
+            {/* Primary actions: Export PDF visible immediately after generation */}
+            <div className="flex justify-center items-center gap-3 mt-4">
+              <ExportPDFButton
+                data={generatedData}
+                diagramRef={mermaidContainerRef}
+                variant="default"
+                size="lg"
+                className="rounded-2xl px-8"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-16 pt-8">
+            <section className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-foreground text-background px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                  01
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  Microservices
+                </h2>
+              </div>
+              <MicroservicesSection
+                microservices={generatedData.microservices}
+              />
+            </section>
+
+            <section className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-foreground text-background px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                  02
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  Core Entities
+                </h2>
+              </div>
+              <EntitiesSection entities={generatedData.entities} />
+            </section>
+
+            <section className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-foreground text-background px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                  03
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  API Infrastructure
+                </h2>
+              </div>
+              <ApiRoutesSection apiRoutes={generatedData.apiRoutes} />
+            </section>
+
+            <section className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-foreground text-background px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                  04
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  Database Architecture
+                </h2>
+              </div>
+              <DatabaseSchemaSection schema={generatedData.databaseSchema} />
+            </section>
+
+            <section className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-foreground text-background px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                  05
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  Deployment & Infra
+                </h2>
+              </div>
+              <InfrastructureSection infra={generatedData.infrastructure} />
+            </section>
+
+            {generatedData["Architecture Diagram"] && (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-foreground text-background px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                      06
+                    </div>
+                    <h2 className="text-2xl font-bold tracking-tight">
+                      Architecture Visual
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <CopyDiagramButton
+                      code={cleanMermaidString(
+                        generatedData["Architecture Diagram"],
+                      )}
+                    />
+                    <ExportPDFButton
+                      data={generatedData}
+                      diagramRef={mermaidContainerRef}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+                <div
+                  ref={mermaidContainerRef}
+                  className="rounded-2xl border border-border/40 bg-card/30 p-8 overflow-hidden backdrop-blur-sm shadow-inner"
+                >
+                  <MermaidDiagram
+                    chart={cleanMermaidString(
+                      generatedData["Architecture Diagram"],
+                    )}
+                  />
+                </div>
+              </section>
+            )}
           </div>
         </div>
       )}

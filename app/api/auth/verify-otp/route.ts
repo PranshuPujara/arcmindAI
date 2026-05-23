@@ -1,6 +1,7 @@
 import { welcomeEmailTemplate } from "@/components/email-template/welcomeEmailTemplate";
 import { sendMail } from "@/lib/mailer";
 import { db } from "@/lib/prisma";
+import { otpRateLimit } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import {
   httpRequestsTotal,
@@ -61,6 +62,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { message: "User is already verified" },
         { status: 400 },
+      );
+    }
+
+    const { success } = await otpRateLimit.limit(user.id);
+    if (!success) {
+      apiGatewayErrorsTotal.inc({ status_code: "429" });
+      httpRequestDurationSeconds.observe(
+        { route },
+        (Date.now() - startTime) / 1000,
+      );
+      return NextResponse.json(
+        { message: "Too many attempts. Please try again later." },
+        { status: 429 },
       );
     }
 

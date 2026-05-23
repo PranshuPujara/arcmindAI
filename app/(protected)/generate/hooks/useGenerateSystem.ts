@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { DOC_ROUTES } from "@/lib/routes";
-import { ArchitectureData } from "../utils/types";
 
 interface GenerateResponse {
   success: boolean;
@@ -13,6 +12,7 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
 
   const generate = async (
     userInput: string,
@@ -138,6 +138,9 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
         const error = err.response?.data?.error || err.response?.data?.message;
         errorMessage =
           error || `HTTP error! status: ${err.response?.status} (${err.code})`;
+        if (err.response?.data?.retryAfter) {
+          setRetryAfter(new Date(err.response.data.retryAfter).getTime());
+        }
       } else if (err instanceof Error) {
         errorMessage = err.message;
       }
@@ -152,5 +155,6 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
     generate,
     isLoading,
     error,
+    retryAfter,
   };
 }

@@ -81,6 +81,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!newPassword || newPassword.length < 8) {
+      return NextResponse.json(
+        { message: "Password must be at least 8 characters" },
+        { status: 400 },
+      );
+    }
+
     const newHashedPassword = await bcrypt.hash(newPassword, 10);
 
     const dbEnd2 = databaseQueryDurationSeconds.startTimer({
