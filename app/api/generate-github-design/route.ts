@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
         try {
           for await (const chunk of responseStream) {
             let text = "";
-            const msgChunk = chunk as MessageChunk;
+            const msgChunk = chunk as unknown as MessageChunk;
 
             if (typeof msgChunk === "string") {
               text = msgChunk;
