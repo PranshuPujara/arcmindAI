@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { invokeGeminiWithFallback } from "@/app/(protected)/generate/utils/aiClient";
+import { streamGeminiWithFallback } from "@/app/(protected)/generate/utils/aiClient";
 import { SystemPrompt } from "@/lib/prompts/promptTemplate";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { db } from "@/lib/prisma";
@@ -21,8 +21,130 @@ import {
   databaseQueryDurationSeconds,
 } from "@/lib/metrics";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+interface ChunkContent {
+  text?: string;
+  [key: string]: unknown;
+}
+
+interface MessageChunk {
+  content?: string | ChunkContent[];
+  text?: string | (() => string);
+  [key: string]: unknown;
+}
+
+function extractTextFromChunk(chunk: unknown): string {
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+
+  const msgChunk = chunk as MessageChunk;
+
+  // Handle LangChain chunks which often have content as string or array
+  if (msgChunk?.content !== undefined) {
+    if (typeof msgChunk.content === "string") {
+      return msgChunk.content;
+    }
+    if (Array.isArray(msgChunk.content)) {
+      return msgChunk.content
+        .map((item: ChunkContent | string) => {
+          if (typeof item === "string") return item;
+          return item?.text || "";
+        })
+        .join("");
+    }
+  }
+
+  if (msgChunk?.text) {
+    return typeof msgChunk.text === "function"
+      ? (msgChunk.text as () => string)()
+      : (msgChunk.text as string);
+  }
+
+  return "";
+}
+
+function parseAIResponse(fullResponse: string) {
+  let jsonText = fullResponse;
+
+  const jsonStartMarker = "```json";
+  const jsonStart = jsonText.indexOf(jsonStartMarker);
+
+  if (jsonStart !== -1) {
+    jsonText = jsonText.slice(jsonStart + jsonStartMarker.length);
+
+    const jsonEnd = jsonText.indexOf("```");
+
+    if (jsonEnd !== -1) {
+      jsonText = jsonText.slice(0, jsonEnd);
+    }
+  } else {
+    const firstBrace = jsonText.indexOf("{");
+
+    if (firstBrace !== -1) {
+      let braceCount = 0;
+      let lastBrace = -1;
+
+      for (let i = firstBrace; i < jsonText.length; i++) {
+        if (jsonText[i] === "{") braceCount++;
+
+        if (jsonText[i] === "}") {
+          braceCount--;
+
+          if (braceCount === 0) {
+            lastBrace = i;
+            break;
+          }
+        }
+      }
+
+      if (lastBrace !== -1) {
+        jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+      }
+    }
+  }
+
+  jsonText = jsonText.trim();
+
+  if (!jsonText) {
+    throw new Error("No JSON content found in AI response.");
+  }
+
+  const parsedData = JSON.parse(jsonText);
+
+  const mermaidStartMarker = "```mermaid";
+
+  const mermaidStart = fullResponse.indexOf(mermaidStartMarker);
+
+  if (mermaidStart !== -1) {
+    let mermaidText = fullResponse.slice(
+      mermaidStart + mermaidStartMarker.length,
+    );
+
+    const mermaidEnd = mermaidText.indexOf("```");
+
+    if (mermaidEnd !== -1) {
+      mermaidText = mermaidText.slice(0, mermaidEnd);
+    }
+
+    mermaidText = mermaidText
+      .replace(/```mermaid/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    if (mermaidText) {
+      parsedData["Architecture Diagram"] = mermaidText;
+    }
+  }
+
+  return parsedData;
+}
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
+
   const route = "/api/generate";
   const method = "POST";
 
@@ -52,7 +174,9 @@ export async function POST(req: NextRequest) {
       );
 
       return NextResponse.json(
-        { error: "Invalid request body. Missing 'userInput' field." },
+        {
+          error: "Invalid request body. Missing 'userInput' field.",
+        },
         { status: 400 },
       );
     }
@@ -69,7 +193,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch authenticated user
-    const dbStart = Date.now();
+    const userFindStart = Date.now();
 
     const user = await db.user.findFirst({
       where: { id: userId },
@@ -77,7 +201,7 @@ export async function POST(req: NextRequest) {
 
     databaseQueryDurationSeconds.observe(
       { operation: "findFirst" },
-      (Date.now() - dbStart) / 1000,
+      (Date.now() - userFindStart) / 1000,
     );
 
     if (!user) {
@@ -156,187 +280,136 @@ export async function POST(req: NextRequest) {
 
     // Keep the rest of your existing AI generation logic BELOW this point
 
-    // Increment AI generation request counter
     aiGenerationRequestsTotal.inc();
 
-    // Update user activity
     userLastActivityTimestamp.set({ user_id: userId }, Date.now() / 1000);
 
-    // ✅ Construct the AI messages
     const messages = [
       new SystemMessage(SystemPrompt),
       new HumanMessage(userInput),
     ];
 
-    // 🧠 Call Gemini model with timing and automatic fallback
     const aiStart = Date.now();
-    const { response } = await invokeGeminiWithFallback(
+
+    const stream = await streamGeminiWithFallback(
       messages,
       userApiKeys.geminiApiKey,
     );
-    const aiDuration = (Date.now() - aiStart) / 1000;
-    aiGenerationDurationSeconds.observe(aiDuration);
 
-    if (!response || !response.content) {
-      aiGenerationFailureTotal.inc();
-      throw new Error("Empty AI response received.");
-    }
+    const encoder = new TextEncoder();
 
-    const finalAIresponse = response.content;
-    let cleanedOutput: string;
+    let fullResponse = "";
 
-    // ✅ Handle both object and string types safely
-    if (typeof finalAIresponse === "string") {
-      cleanedOutput = finalAIresponse;
-    } else if (
-      typeof finalAIresponse === "object" &&
-      "output" in finalAIresponse
-    ) {
-      cleanedOutput = finalAIresponse.output as string;
-    } else {
-      aiGenerationFailureTotal.inc();
-      throw new Error("Unexpected AI response format.");
-    }
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const text = extractTextFromChunk(chunk);
 
-    // 🧹 Clean up the AI output and extract JSON
-    try {
-      let jsonText = cleanedOutput;
+            if (!text) continue;
 
-      // Find the start of JSON code block
-      const jsonStartMarker = "```json";
-      const jsonStart = jsonText.indexOf(jsonStartMarker);
+            fullResponse += text;
 
-      if (jsonStart !== -1) {
-        // Extract from after the ```json marker
-        jsonText = jsonText.slice(jsonStart + jsonStartMarker.length);
-
-        // Find the first closing ``` after the JSON start (not the last one in the entire string)
-        const jsonEnd = jsonText.indexOf("```");
-        if (jsonEnd !== -1) {
-          jsonText = jsonText.slice(0, jsonEnd);
-        }
-      } else {
-        // If no ```json marker, try to find JSON object directly
-        // Look for first { and last } to extract JSON
-        const firstBrace = jsonText.indexOf("{");
-        if (firstBrace !== -1) {
-          // Find matching closing brace
-          let braceCount = 0;
-          let lastBrace = -1;
-          for (let i = firstBrace; i < jsonText.length; i++) {
-            if (jsonText[i] === "{") braceCount++;
-            if (jsonText[i] === "}") {
-              braceCount--;
-              if (braceCount === 0) {
-                lastBrace = i;
-                break;
-              }
-            }
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  chunk: text,
+                })}\n\n`,
+              ),
+            );
           }
-          if (lastBrace !== -1) {
-            jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+
+          const aiDuration = (Date.now() - aiStart) / 1000;
+
+          aiGenerationDurationSeconds.observe(aiDuration);
+
+          if (!fullResponse.trim()) {
+            aiGenerationFailureTotal.inc();
+
+            throw new Error("Empty AI response received.");
           }
+
+          const parsedData = parseAIResponse(fullResponse);
+
+          const createStart = Date.now();
+
+          await db.generation.create({
+            data: {
+              userInput,
+              generatedOutput: parsedData,
+              userId,
+            },
+          });
+
+          databaseQueryDurationSeconds.observe(
+            { operation: "create" },
+            (Date.now() - createStart) / 1000,
+          );
+
+          aiGenerationSuccessTotal.inc();
+
+          userGenerationsTotal.inc({
+            user_id: userId,
+          });
+
+          userLastActivityTimestamp.set({ user_id: userId }, Date.now() / 1000);
+
+          aiGenerationOutputSizeBytes.set(JSON.stringify(parsedData).length);
+
+          httpRequestDurationSeconds.observe(
+            { route },
+            (Date.now() - startTime) / 1000,
+          );
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                done: true,
+                parsedData,
+                limit,
+                remaining,
+                reset,
+              })}\n\n`,
+            ),
+          );
+
+          controller.close();
+        } catch (error: unknown) {
+          console.error("Streaming error:", error);
+
+          aiGenerationFailureTotal.inc();
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                error:
+                  error instanceof Error ? error.message : "Streaming failed",
+              })}\n\n`,
+            ),
+          );
+
+          controller.close();
         }
-      }
+      },
+    });
 
-      jsonText = jsonText.trim();
-
-      if (!jsonText) throw new Error("No JSON content found in AI response.");
-
-      const parsedData = JSON.parse(jsonText);
-
-      // 🎨 Extract mermaid diagram if present
-      const mermaidStartMarker = "```mermaid";
-      const mermaidStart = cleanedOutput.indexOf(mermaidStartMarker);
-
-      if (mermaidStart !== -1) {
-        // Extract from after the ```mermaid marker
-        let mermaidText = cleanedOutput.slice(
-          mermaidStart + mermaidStartMarker.length,
-        );
-
-        // Find the first closing ``` after the mermaid start
-        const mermaidEnd = mermaidText.indexOf("```");
-        if (mermaidEnd !== -1) {
-          mermaidText = mermaidText.slice(0, mermaidEnd);
-        }
-
-        // Clean up the mermaid diagram
-        mermaidText = mermaidText
-          .replace(/```mermaid/g, "")
-          .replace(/```/g, "")
-          .trim();
-
-        // Add to parsedData
-        if (mermaidText) {
-          parsedData["Architecture Diagram"] = mermaidText;
-        }
-      }
-
-      // 💾 Save generation result in DB with timing
-      const dbStart = Date.now();
-      await db.generation.create({
-        data: {
-          userInput,
-          generatedOutput: parsedData,
-          userId,
-        },
-      });
-      databaseQueryDurationSeconds.observe(
-        { operation: "create" },
-        (Date.now() - dbStart) / 1000,
-      );
-
-      // Increment success counters
-      aiGenerationSuccessTotal.inc();
-      userGenerationsTotal.inc({ user_id: userId });
-
-      // Update user activity
-      userLastActivityTimestamp.set({ user_id: userId }, Date.now() / 1000);
-
-      // Set output size
-      aiGenerationOutputSizeBytes.set(JSON.stringify(parsedData).length);
-
-      // Track total HTTP duration
-      httpRequestDurationSeconds.observe(
-        { route },
-        (Date.now() - startTime) / 1000,
-      );
-
-      return NextResponse.json({
-        success: true,
-        output: finalAIresponse,
-        limit,
-        remaining,
-        reset,
-      });
-    } catch (jsonError: unknown) {
-      aiGenerationFailureTotal.inc();
-      const errorMessage =
-        jsonError instanceof Error ? jsonError.message : "Unknown error";
-      console.error("JSON parsing error:", jsonError);
-      httpRequestDurationSeconds.observe(
-        { route },
-        (Date.now() - startTime) / 1000,
-      );
-      return NextResponse.json(
-        {
-          error: "Failed to parse AI response JSON. Try rephrasing your input.",
-          details: errorMessage,
-        },
-        { status: 422 },
-      );
-    }
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error: unknown) {
     aiGenerationFailureTotal.inc();
-    console.error("Error generating response:", error);
 
-    // Handle specific Prisma or AI-related errors
+    console.error("Error in generation request:", error);
+
     let status = 500;
+
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
-    // Check if all API keys failed (trigger user to add their own keys)
     const isApiKeyError =
       errorMessage.toLowerCase().includes("api key") ||
       errorMessage.toLowerCase().includes("rate limit") ||
@@ -352,12 +425,15 @@ export async function POST(req: NextRequest) {
     ) {
       status = 409;
     } else if (isApiKeyError) {
-      status = 503; // Service Unavailable - signals client to show API key dialog
+      status = 503;
     } else if (errorMessage.includes("AI")) {
       status = 502;
     }
 
-    apiGatewayErrorsTotal.inc({ status_code: status.toString() });
+    apiGatewayErrorsTotal.inc({
+      status_code: status.toString(),
+    });
+
     httpRequestDurationSeconds.observe(
       { route },
       (Date.now() - startTime) / 1000,

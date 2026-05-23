@@ -1,17 +1,17 @@
-import { DOC_ROUTES } from "@/lib/routes";
-import axios from "axios";
-import { useSession } from "next-auth/react";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { DOC_ROUTES } from "@/lib/routes";
+import { ArchitectureData } from "../utils/types";
 
 interface GenerateResponse {
   success: boolean;
   output: string;
+  parsedData?: ArchitectureData;
+  limit?: number;
+  remaining?: number;
+  reset?: string;
 }
 
-interface GenerateError {
-  error: string;
-  retryAfter?: string;
-}
 export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
   const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
@@ -20,6 +20,7 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
 
   const generate = async (
     userInput: string,
+    onChunk?: (chunk: string) => void,
   ): Promise<GenerateResponse | null> => {
     // @ts-expect-error accessToken is added to session in NextAuth callbacks
     if (!session?.user?.accessToken) {
@@ -29,18 +30,112 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
 
     setIsLoading(true);
     setError(null);
+    setRetryAfter(null);
 
     try {
-      const response = await axios.post(DOC_ROUTES.API.GENERATE.ROOT, {
-        userInput,
-        // @ts-expect-error accessToken is added to session in NextAuth callbacks
-        userId: session?.user.id,
+      const response = await fetch(DOC_ROUTES.API.GENERATE.ROOT, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userInput,
+          // @ts-expect-error accessToken is added to session in NextAuth callbacks
+          userId: session?.user.id,
+        }),
       });
 
-      if (response.status < 200 || response.status >= 300) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+
+        if (response.status === 429 && errorBody.retryAfter) {
+          const secondsLeft = Math.ceil(
+            (new Date(errorBody.retryAfter).getTime() - Date.now()) / 1000,
+          );
+          setRetryAfter(Math.max(secondsLeft, 1));
+        }
+
+        throw new Error(
+          errorBody.error || `HTTP error! status: ${response.status}`,
+        );
       }
-      const data: GenerateResponse = response.data;
+
+      const reader = response.body?.getReader();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      const decoder = new TextDecoder();
+      let output = "";
+      let buffer = "";
+      let parsedData = null;
+      let limitInfo = {
+        limit: undefined,
+        remaining: undefined,
+        reset: undefined,
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        const chunkText = decoder.decode(value, { stream: true });
+        buffer += chunkText;
+
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          if (part.startsWith("data: ")) {
+            const dataStr = part.slice(6);
+            if (!dataStr || dataStr === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(dataStr);
+
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+
+              if (parsed && typeof parsed.chunk === "string") {
+                output += parsed.chunk;
+                // Real-time UI update with streaming chunks
+                onChunk?.(parsed.chunk);
+              }
+
+              if (parsed.done) {
+                if (parsed.parsedData) parsedData = parsed.parsedData;
+                limitInfo = {
+                  limit: parsed.limit,
+                  remaining: parsed.remaining,
+                  reset: parsed.reset,
+                };
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message === "Streaming failed")
+                throw e;
+              console.error("Failed to parse SSE chunk:", dataStr);
+            }
+          }
+        }
+      }
+
+      reader.releaseLock();
+
+      if (!output?.trim()) {
+        throw new Error(
+          "Empty AI response. Possible causes: unauthorized request (401), middleware block, or backend failure.",
+        );
+      }
+
+      const data: GenerateResponse = {
+        success: true,
+        output,
+        parsedData,
+        ...limitInfo,
+      };
 
       // Refetch history after successful generation
       if (data.success && refetchHistory) {
@@ -49,22 +144,8 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
 
       return data;
     } catch (err) {
-      let errorMessage = "An error occurred";
-      if (axios.isAxiosError(err)) {
-        const data: GenerateError = err.response?.data || {};
-        errorMessage =
-          data.error ||
-          `HTTP error! status: ${err.response?.status} (${err.code})`;
-
-        if (err.response?.status === 429 && data.retryAfter) {
-          const secondsLeft = Math.ceil(
-            (new Date(data.retryAfter).getTime() - Date.now()) / 1000,
-          );
-          setRetryAfter(Math.max(secondsLeft, 1));
-        }
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      }
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
       return null;
     } finally {

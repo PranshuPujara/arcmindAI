@@ -1,6 +1,12 @@
-import { invokeGeminiWithFallback } from "@/app/(protected)/generate/utils/aiClient";
-import { formatRepositoryAnalysisForAI } from "@/app/(protected)/generate/utils/formatRepoAnalysis";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { GithubRepoSystemPrompt } from "@/lib/prompts/githubRepoPrompt";
+import { formatRepositoryAnalysisForAI } from "@/app/(protected)/generate/utils/formatRepoAnalysis";
+import { RepositoryAnalysis } from "@/types/repository-analysis";
+import { db } from "@/lib/prisma";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { streamGeminiWithFallback } from "@/app/(protected)/generate/utils/aiClient";
 import { getUserApiKeys } from "@/lib/api-keys/getUserApiKeys";
 import {
   aiGenerationDurationSeconds,
@@ -10,18 +16,23 @@ import {
   databaseQueryDurationSeconds,
   httpRequestsTotal,
 } from "@/lib/metrics";
-import { db } from "@/lib/prisma";
-import { GithubRepoSystemPrompt } from "@/lib/prompts/githubRepoPrompt";
-import { RepositoryAnalysis } from "@/types/repository-analysis";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { getServerSession } from "next-auth";
-import { NextRequest, NextResponse } from "next/server";
 
 interface GenerateGithubDesignRequest {
   owner: string;
   repo: string;
   analysisData: RepositoryAnalysis;
   branch?: string;
+}
+
+interface ChunkContent {
+  text?: string;
+  [key: string]: unknown;
+}
+
+interface MessageChunk {
+  content?: string | ChunkContent[];
+  text?: string | (() => string);
+  [key: string]: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -80,14 +91,40 @@ export async function POST(request: NextRequest) {
       (Date.now() - dbFindStart) / 1000,
     );
 
-    // If design already exists, return it from cache
+    // If design exists, stream it back in the same SSE format the frontend now expects
     if (existingGeneration?.githubGeneration) {
+      const encoder = new TextEncoder();
+      const cachedDiagram = existingGeneration.githubGeneration;
+      const genId = existingGeneration.id;
+
+      const cachedStream = new ReadableStream({
+        start(controller) {
+          // Send as one single chunk or few chunks for the "typing" effect
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ chunk: cachedDiagram })}\n\n`,
+            ),
+          );
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                done: true,
+                generationId: genId,
+                cached: true,
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      });
+
       httpRequestsTotal.inc({ route, method, status_code: "200" });
-      return NextResponse.json({
-        success: true,
-        generationId: existingGeneration.id,
-        mermaidDiagram: existingGeneration.githubGeneration,
-        cached: true, // Indicate this is from cache
+      return new Response(cachedStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
       });
     }
 
@@ -110,48 +147,111 @@ export async function POST(request: NextRequest) {
     aiGenerationRequestsTotal.inc();
     aiRequested = true;
     const aiStart = Date.now();
-    const { response } = await invokeGeminiWithFallback(
+
+    // streaming version
+    const responseStream = await streamGeminiWithFallback(
       messages,
       userApiKeys.geminiApiKey,
     );
-    const aiDuration = (Date.now() - aiStart) / 1000;
-    aiGenerationDurationSeconds.observe(aiDuration);
+    let mermaidDiagram = "";
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of responseStream) {
+            let text = "";
+            const msgChunk = chunk as unknown as MessageChunk;
 
-    if (!response || !response.content) {
-      aiGenerationFailureTotal.inc();
-      aiFailureRecorded = true;
-      throw new Error("Empty AI response received.");
-    }
-    let mermaidDiagram = response.content as string;
+            if (typeof msgChunk === "string") {
+              text = msgChunk;
+            } else if (msgChunk?.content !== undefined) {
+              if (typeof msgChunk.content === "string") {
+                text = msgChunk.content;
+              } else if (Array.isArray(msgChunk.content)) {
+                text = msgChunk.content
+                  .map((item: ChunkContent | string) => {
+                    if (typeof item === "string") return item;
+                    return item?.text || "";
+                  })
+                  .join("");
+              }
+            } else if (msgChunk?.text) {
+              text =
+                typeof msgChunk.text === "function"
+                  ? msgChunk.text()
+                  : msgChunk.text;
+            }
 
-    // Clean up the response - remove markdown code blocks if present
-    mermaidDiagram = mermaidDiagram
-      .replace(/```mermaid\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
+            // Store full response
+            mermaidDiagram += text;
 
-    // Save to database
-    const dbCreateStart = Date.now();
-    const generation = await db.generation.create({
-      data: {
-        userInput: repoIdentifier,
-        githubGeneration: mermaidDiagram,
-        userId: userId,
+            // Stream chunk as JSON SSE immediately
+            if (text) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ chunk: text })}\n\n`),
+              );
+            }
+          }
+
+          const aiDuration = (Date.now() - aiStart) / 1000;
+          aiGenerationDurationSeconds.observe(aiDuration);
+
+          // Cleanup markdown formatting
+          mermaidDiagram = mermaidDiagram
+            .replace(/```mermaid\n?/g, "")
+            .replace(/```\n?/g, "")
+            .trim();
+
+          // Save completed response
+          const dbCreateStart = Date.now();
+          const generation = await db.generation.create({
+            data: {
+              userInput: repoIdentifier,
+              githubGeneration: mermaidDiagram,
+              userId,
+            },
+          });
+          databaseQueryDurationSeconds.observe(
+            { operation: "create" },
+            (Date.now() - dbCreateStart) / 1000,
+          );
+
+          aiGenerationSuccessTotal.inc();
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                done: true,
+                generationId: generation.id,
+              })}\n\n`,
+            ),
+          );
+
+          controller.close();
+        } catch (error) {
+          aiGenerationFailureTotal.inc();
+          aiFailureRecorded = true;
+          console.error("Streaming error:", error);
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                error:
+                  error instanceof Error ? error.message : "Streaming failed",
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        }
       },
     });
-    databaseQueryDurationSeconds.observe(
-      { operation: "create" },
-      (Date.now() - dbCreateStart) / 1000,
-    );
-
-    aiGenerationSuccessTotal.inc();
 
     httpRequestsTotal.inc({ route, method, status_code: "200" });
-    return NextResponse.json({
-      success: true,
-      generationId: generation.id,
-      mermaidDiagram,
-      cached: false, // Indicate this is newly generated
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
     });
   } catch (error) {
     if (aiRequested && !aiFailureRecorded) {

@@ -1,47 +1,113 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// Initialize Redis client only if credentials are available
+const redis =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      })
+    : null;
+
+// Fallback in-memory rate limit tracking for development (when Redis unavailable)
+const inMemoryLimits = new Map<string, { count: number; resetAt: number }>();
+
+function checkInMemoryLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+) {
+  const now = Date.now();
+  const limit = inMemoryLimits.get(key);
+
+  if (!limit || now > limit.resetAt) {
+    inMemoryLimits.set(key, { count: 1, resetAt: now + windowMs });
+    return {
+      success: true,
+      limit: maxRequests,
+      remaining: maxRequests - 1,
+      reset: now + windowMs,
+    };
+  }
+
+  if (limit.count >= maxRequests) {
+    return {
+      success: false,
+      limit: maxRequests,
+      remaining: 0,
+      reset: limit.resetAt,
+    };
+  }
+
+  limit.count++;
+  return {
+    success: true,
+    limit: maxRequests,
+    remaining: maxRequests - limit.count,
+    reset: limit.resetAt,
+  };
+}
 
 // Plan-aware generation rate limiters
-export const generationRateLimits = {
-  free: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(5, "1 h"),
-    analytics: true,
-  }),
+export const generationRateLimits = redis
+  ? {
+      free: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, "1 h"),
+        analytics: true,
+      }),
 
-  pro: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(50, "1 h"),
-    analytics: true,
-  }),
+      pro: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(50, "1 h"),
+        analytics: true,
+      }),
 
-  enterprise: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(200, "1 h"),
-    analytics: true,
-  }),
-};
+      enterprise: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(200, "1 h"),
+        analytics: true,
+      }),
+    }
+  : {
+      free: {
+        limit: async (key: string) => checkInMemoryLimit(key, 5, 3600000),
+      } as unknown as Ratelimit,
+      pro: {
+        limit: async (key: string) => checkInMemoryLimit(key, 50, 3600000),
+      } as unknown as Ratelimit,
+      enterprise: {
+        limit: async (key: string) => checkInMemoryLimit(key, 200, 3600000),
+      } as unknown as Ratelimit,
+    };
 
-export const otpRateLimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(1, "60 s"), // 1 request per 60 seconds
-  analytics: true,
-});
+export const otpRateLimit = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(1, "60 s"), // 1 request per 60 seconds
+      analytics: true,
+    })
+  : ({
+      limit: async (key: string) => checkInMemoryLimit(key, 1, 60000),
+    } as unknown as Ratelimit);
 
-export const loginRateLimitIP = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(5, "60 s"), // 5 requests per IP per minute
-  analytics: true,
-});
+export const loginRateLimitIP = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(5, "60 s"), // 5 requests per IP per minute
+      analytics: true,
+    })
+  : ({
+      limit: async (key: string) => checkInMemoryLimit(key, 5, 60000),
+    } as unknown as Ratelimit);
 
-export const loginRateLimitAccount = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(5, "3600 s"), // 5 requests per account per hour
-  analytics: true,
-});
+export const loginRateLimitAccount = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(5, "3600 s"), // 5 requests per account per hour
+      analytics: true,
+    })
+  : ({
+      limit: async (key: string) => checkInMemoryLimit(key, 5, 3600000),
+    } as unknown as Ratelimit);

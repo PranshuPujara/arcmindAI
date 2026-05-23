@@ -8,12 +8,14 @@ const geminiLLM = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash-lite",
   temperature: 0.7,
   apiKey: process.env.GEMINI_API_KEY,
+  streaming: true,
 });
 
 const geminiLLM_2 = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash-lite",
   temperature: 0.7,
   apiKey: process.env.GEMINI_API_KEY_UNSECURED,
+  streaming: true,
 });
 
 /**
@@ -24,6 +26,7 @@ function createGeminiClient(apiKey: string): ChatGoogleGenerativeAI {
     model: "gemini-2.5-flash-lite",
     temperature: 0.7,
     apiKey,
+    streaming: true,
   });
 }
 
@@ -146,5 +149,52 @@ export async function invokeGeminiWithFallback(
   }
 }
 
-// Export the LLMs for direct use if needed (not recommended)
+// streaming version of the above function
+
+export async function streamGeminiWithFallback(
+  messages: BaseMessage[],
+  userApiKey?: string,
+) {
+  // Tier 1: User API key
+  if (userApiKey) {
+    try {
+      console.log("Attempting Gemini streaming with user's personal API key");
+
+      const userClient = createGeminiClient(userApiKey);
+
+      return await userClient.stream(messages);
+    } catch (error) {
+      console.warn(
+        "User Gemini streaming failed, falling back to system key:",
+        error,
+      );
+    }
+  }
+
+  // Tier 2: Primary system key
+  try {
+    console.log("Attempting Gemini streaming with primary system API key");
+
+    return await geminiLLM.stream(messages);
+  } catch (error) {
+    if (shouldFallback(error)) {
+      console.warn("Primary streaming key failed, trying fallback key:", error);
+
+      // Tier 3: Secondary system key
+      try {
+        return await geminiLLM_2.stream(messages);
+      } catch (fallbackError) {
+        console.error("All Gemini streaming API keys failed:", {
+          primary: error,
+          fallback: fallbackError,
+        });
+
+        throw fallbackError;
+      }
+    }
+
+    throw error;
+  }
+}
+
 export { geminiLLM, geminiLLM_2 };

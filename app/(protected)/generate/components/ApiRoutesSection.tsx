@@ -3,13 +3,15 @@ import { ArchitectureData } from "../utils/types";
 import { Badge } from "@/components/ui/badge";
 
 interface ApiRoutesSectionProps {
-  apiRoutes: ArchitectureData["apiRoutes"];
+  apiRoutes?: ArchitectureData["apiRoutes"];
 }
 
-export default function ApiRoutesSection({ apiRoutes }: ApiRoutesSectionProps) {
+export default function ApiRoutesSection({
+  apiRoutes = [],
+}: ApiRoutesSectionProps) {
   return (
     <div className="space-y-12">
-      {apiRoutes.map((serviceRoutes, index) => (
+      {apiRoutes?.map((serviceRoutes, index) => (
         <div key={index} className="space-y-6">
           <div className="flex items-center gap-4">
             <h3 className="text-lg font-bold tracking-tight">

@@ -24,13 +24,15 @@ const {
   ADMIN_EMAIL,
 } = process.env;
 
-// Fail fast: clear error if any required env vars are missing
-if (
-  !GOOGLE_CLIENT_ID ||
-  !GOOGLE_CLIENT_SECRET ||
-  !GOOGLE_REFRESH_TOKEN ||
-  !ADMIN_EMAIL
-) {
+// Check if OAuth2 config is available
+const isEmailConfigured =
+  GOOGLE_CLIENT_ID &&
+  GOOGLE_CLIENT_SECRET &&
+  GOOGLE_REFRESH_TOKEN &&
+  ADMIN_EMAIL;
+
+// For development: allow app to run without email (log warning instead)
+if (!isEmailConfigured && process.env.NODE_ENV === "production") {
   throw new Error(
     "Missing OAuth2 configuration. Ensure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, and ADMIN_EMAIL are set.",
   );
@@ -38,19 +40,29 @@ if (
 
 // For refresh-only use, redirect URI is not required by google.auth.OAuth2 constructor.
 // If you’re actively exchanging auth codes (web flow), include the redirect URI.
-const oAuth2Client = GOOGLE_REDIRECT_URI
-  ? new google.auth.OAuth2(
-      GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET,
-      GOOGLE_REDIRECT_URI,
-    )
-  : new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
+const oAuth2Client = isEmailConfigured
+  ? GOOGLE_REDIRECT_URI
+    ? new google.auth.OAuth2(
+        GOOGLE_CLIENT_ID!,
+        GOOGLE_CLIENT_SECRET!,
+        GOOGLE_REDIRECT_URI,
+      )
+    : new google.auth.OAuth2(GOOGLE_CLIENT_ID!, GOOGLE_CLIENT_SECRET!)
+  : null;
 
-// Set long-lived refresh token
-oAuth2Client.setCredentials({ refresh_token: GOOGLE_REFRESH_TOKEN });
+// Set long-lived refresh token if configured
+if (oAuth2Client && isEmailConfigured) {
+  oAuth2Client.setCredentials({ refresh_token: GOOGLE_REFRESH_TOKEN });
+}
 
 // Helper: obtain a fresh access token safely
 async function getAccessToken(): Promise<string> {
+  if (!oAuth2Client) {
+    throw new Error(
+      "Email is not configured. Set OAuth2 environment variables.",
+    );
+  }
+
   try {
     // googleapis types can return string | null | undefined in { token }
     const res = await oAuth2Client.getAccessToken();
@@ -94,6 +106,13 @@ export async function sendMail({
   text?: string;
   html?: string;
 }) {
+  if (!isEmailConfigured) {
+    console.log(
+      "⚠️  Skipping email sending (Email is not configured). Set GOOGLE_CLIENT_ID, etc. to enable.",
+    );
+    return;
+  }
+
   // Acquire a fresh access token for each send
   const accessToken = await getAccessToken();
 
