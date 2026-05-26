@@ -20,6 +20,7 @@ import {
   apiGatewayErrorsTotal,
   databaseQueryDurationSeconds,
 } from "@/lib/metrics";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -109,7 +110,8 @@ function parseAIResponse(fullResponse: string): Record<string, unknown> {
   if (!jsonText) {
     return {
       success: false,
-      error: "No JSON payload structure could be localized in the raw stream buffer.",
+      error:
+        "No JSON payload structure could be localized in the raw stream buffer.",
       "System Error": "Format mismatch",
     };
   }
@@ -119,7 +121,10 @@ function parseAIResponse(fullResponse: string): Record<string, unknown> {
   try {
     parsedData = JSON.parse(jsonText);
   } catch (initialParseError) {
-    console.warn("⚠️ Initial JSON parser pass failed. Attempting structural recovery procedures:", initialParseError);
+    console.warn(
+      "⚠️ Initial JSON parser pass failed. Attempting structural recovery procedures:",
+      initialParseError,
+    );
 
     // Attempt Self-Healing 1: Try closing outstanding brackets for truncated responses
     try {
@@ -130,7 +135,7 @@ function parseAIResponse(fullResponse: string): Record<string, unknown> {
 
       for (let i = 0; i < jsonText.length; i++) {
         const char = jsonText[i];
-        if (char === '\\' && inString) {
+        if (char === "\\" && inString) {
           escaped = !escaped;
           continue;
         }
@@ -140,10 +145,10 @@ function parseAIResponse(fullResponse: string): Record<string, unknown> {
         escaped = false;
 
         if (!inString) {
-          if (char === '{') openBraces++;
-          if (char === '}') openBraces--;
-          if (char === '[') openBrackets++;
-          if (char === ']') openBrackets--;
+          if (char === "{") openBraces++;
+          if (char === "}") openBraces--;
+          if (char === "[") openBrackets++;
+          if (char === "]") openBrackets--;
         }
       }
 
@@ -160,13 +165,17 @@ function parseAIResponse(fullResponse: string): Record<string, unknown> {
 
       parsedData = JSON.parse(healedJson);
     } catch (healingError) {
-      console.error("🚨 Auto-healing parser phase failed to salvage malformed schema token space:", healingError);
-      
+      console.error(
+        "🚨 Auto-healing parser phase failed to salvage malformed schema token space:",
+        healingError,
+      );
+
       // Attempt Self-Healing 2: Fallback to structured object wrapper matching the expected shape
       parsedData = {
         success: false,
         error: "AI Generation returned malformed structural layout.",
-        rawOutputText: jsonText.slice(0, 1000) + (jsonText.length > 1000 ? "..." : ""),
+        rawOutputText:
+          jsonText.slice(0, 1000) + (jsonText.length > 1000 ? "..." : ""),
       };
     }
   }
@@ -176,7 +185,9 @@ function parseAIResponse(fullResponse: string): Record<string, unknown> {
   const mermaidStart = fullResponse.indexOf(mermaidStartMarker);
 
   if (mermaidStart !== -1) {
-    let mermaidText = fullResponse.slice(mermaidStart + mermaidStartMarker.length);
+    let mermaidText = fullResponse.slice(
+      mermaidStart + mermaidStartMarker.length,
+    );
     const mermaidEnd = mermaidText.indexOf("```");
     if (mermaidEnd !== -1) {
       mermaidText = mermaidText.slice(0, mermaidEnd);
@@ -216,7 +227,10 @@ export async function POST(req: NextRequest) {
 
     if (!body || !body.userInput) {
       apiGatewayErrorsTotal.inc({ status_code: "400" });
-      httpRequestDurationSeconds.observe({ route }, (Date.now() - startTime) / 1000);
+      httpRequestDurationSeconds.observe(
+        { route },
+        (Date.now() - startTime) / 1000,
+      );
 
       return NextResponse.json(
         { error: "Invalid request body. Missing 'userInput' field." },
@@ -246,7 +260,10 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       apiGatewayErrorsTotal.inc({ status_code: "404" });
-      httpRequestDurationSeconds.observe({ route }, (Date.now() - startTime) / 1000);
+      httpRequestDurationSeconds.observe(
+        { route },
+        (Date.now() - startTime) / 1000,
+      );
 
       return NextResponse.json(
         { status: 404, message: "User not Found" },
@@ -256,7 +273,10 @@ export async function POST(req: NextRequest) {
 
     if (user.isVerified === false) {
       apiGatewayErrorsTotal.inc({ status_code: "401" });
-      httpRequestDurationSeconds.observe({ route }, (Date.now() - startTime) / 1000);
+      httpRequestDurationSeconds.observe(
+        { route },
+        (Date.now() - startTime) / 1000,
+      );
 
       return NextResponse.json(
         { status: 401, message: "Email is not verified" },
@@ -286,7 +306,10 @@ export async function POST(req: NextRequest) {
 
       if (!result.success) {
         apiGatewayErrorsTotal.inc({ status_code: "429" });
-        httpRequestDurationSeconds.observe({ route }, (Date.now() - startTime) / 1000);
+        httpRequestDurationSeconds.observe(
+          { route },
+          (Date.now() - startTime) / 1000,
+        );
 
         return NextResponse.json(
           {
@@ -328,9 +351,7 @@ export async function POST(req: NextRequest) {
             fullResponse += text;
 
             controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ chunk: text })}\n\n`,
-              ),
+              encoder.encode(`data: ${JSON.stringify({ chunk: text })}\n\n`),
             );
           }
 
@@ -349,7 +370,7 @@ export async function POST(req: NextRequest) {
           await db.generation.create({
             data: {
               userInput,
-              generatedOutput: parsedData as any,
+              generatedOutput: parsedData as Prisma.JsonObject,
               userId,
             },
           });
@@ -364,7 +385,10 @@ export async function POST(req: NextRequest) {
           userLastActivityTimestamp.set({ user_id: userId }, Date.now() / 1000);
           aiGenerationOutputSizeBytes.set(JSON.stringify(parsedData).length);
 
-          httpRequestDurationSeconds.observe({ route }, (Date.now() - startTime) / 1000);
+          httpRequestDurationSeconds.observe(
+            { route },
+            (Date.now() - startTime) / 1000,
+          );
 
           controller.enqueue(
             encoder.encode(
@@ -386,7 +410,10 @@ export async function POST(req: NextRequest) {
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
-                error: error instanceof Error ? error.message : "Streaming pipeline failed",
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "Streaming pipeline failed",
               })}\n\n`,
             ),
           );
@@ -408,7 +435,8 @@ export async function POST(req: NextRequest) {
     console.error("Error in generation request execution context:", error);
 
     let status = 500;
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
 
     const isApiKeyError =
       errorMessage.toLowerCase().includes("api key") ||
@@ -431,7 +459,10 @@ export async function POST(req: NextRequest) {
     }
 
     apiGatewayErrorsTotal.inc({ status_code: status.toString() });
-    httpRequestDurationSeconds.observe({ route }, (Date.now() - startTime) / 1000);
+    httpRequestDurationSeconds.observe(
+      { route },
+      (Date.now() - startTime) / 1000,
+    );
 
     return NextResponse.json(
       {
