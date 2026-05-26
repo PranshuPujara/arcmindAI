@@ -1,0 +1,47 @@
+# dependencies
+node_modules
+.next
+.git
+.github
+.idea
+.husky
+.vscode
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+/out/
+
+# production
+/build
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local env files — do NOT bake secrets into the image.
+# Compose injects env at runtime.
+.env.local
+.env
+
+# OS / editor cruft
+.DS_Store
+*.pem
+
+# TS build cache
+*.tsbuildinfo
+next-env.d.ts
+
+# Compose / Docker artifacts themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# vercel
+.vercel
