@@ -22,8 +22,6 @@ import {
 } from "@/lib/metrics";
 import { sendWebhook } from "@/lib/webhooks/sendWebhook";
 
-const userId: string | null = null; // Module-level variable to store userId for webhook notifications
-
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -153,18 +151,18 @@ export async function POST(req: NextRequest) {
 
   httpRequestsTotal.inc({ route, method });
 
+  // SECURE AUTH — get userId from server session
+  const session = await getServerSession(authOptions);
+  // @ts-expect-error custom session user id
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    apiGatewayErrorsTotal.inc({ status_code: "401" });
+
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    // SECURE AUTH — get userId from server session
-    const session = await getServerSession(authOptions);
-    // @ts-expect-error custom session user id
-    const userId = session?.user?.id;
-
-    if (!userId) {
-      apiGatewayErrorsTotal.inc({ status_code: "401" });
-
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await req.json().catch(() => null);
 
     if (!body || !body.userInput) {
@@ -362,6 +360,16 @@ export async function POST(req: NextRequest) {
             { route },
             (Date.now() - startTime) / 1000,
           );
+
+          // Send webhook notification for successful generation
+          await sendWebhook({
+            userId,
+            event: "generation.success",
+            data: {
+              userInput,
+              generatedOutput: parsedData,
+            },
+          });
 
           controller.enqueue(
             encoder.encode(

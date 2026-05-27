@@ -180,7 +180,7 @@ export default function WebhooksPage() {
         <div className="flex min-h-screen flex-col">
           <Navbar />
 
-          <main className="container flex-1 py-28">
+          <main className="flex-1 py-28 px-4 md:px-8">
             {/* HERO */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -213,7 +213,7 @@ export default function WebhooksPage() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="mx-auto mt-14 max-w-4xl"
+              className="mx-auto mt-14 w-full max-w-4xl px-4"
             >
               <div className="border-border/50 bg-background/60 rounded-3xl border p-8 shadow-2xl backdrop-blur-xl">
                 <div className="mb-6 flex items-center gap-3">
@@ -232,7 +232,7 @@ export default function WebhooksPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4 md:flex-row">
+                <div className="flex w-full flex-col gap-4 md:flex-row md:items-center">
                   <input
                     type="text"
                     placeholder={
@@ -243,14 +243,14 @@ export default function WebhooksPage() {
                     value={webhookUrl}
                     onChange={(e) => setWebhookUrl(e.target.value)}
                     disabled={!isAuthenticated}
-                    className="border-border bg-background/80 focus:ring-primary/30 h-14 flex-1 rounded-2xl border px-5 outline-none transition-all focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50"
+                    className=" w-full min-w-0 border-border bg-background/80 focus:ring-primary/30 h-14 flex-1 rounded-2xl border px-5 outline-none transition-all focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50"
                   />
 
                   <Button
                     size="lg"
                     onClick={handleAddWebhook}
                     disabled={loading || !isAuthenticated}
-                    className="h-14 rounded-2xl px-8 text-base"
+                    className="h-14 shrink-0 rounded-2xl px-8 text-base"
                   >
                     {loading ? (
                       <Loader2 className="mr-2 size-5 animate-spin" />
@@ -280,7 +280,7 @@ export default function WebhooksPage() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="mx-auto mt-14 max-w-4xl"
+              className="mx-auto mt-14 w-full max-w-4xl px-4"
             >
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-3xl font-bold">Registered Webhooks</h2>
@@ -398,7 +398,7 @@ export default function WebhooksPage() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.35 }}
-              className="mx-auto mt-16 max-w-4xl"
+              className="mx-auto mt-16 max-w-4xl px-4"
             >
               <div className="mb-6">
                 <h2 className="text-3xl font-bold">Recent Deliveries</h2>
@@ -408,7 +408,7 @@ export default function WebhooksPage() {
                 </p>
               </div>
 
-              <div className="border-border/50 bg-background/50 overflow-hidden rounded-3xl border backdrop-blur-xl">
+              <div className="border-border/50 bg-background/50 overflow-hidden rounded-3xl border backdrop-blur-xl px-2">
                 <div className="divide-border/40 divide-y">
                   {showSkeleton &&
                     Array.from({ length: 4 }).map((_, index) => (
