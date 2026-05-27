@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
+    // @ts-expect-error custom session user id
     userId = session?.user?.id;
 
     if (!userId) {

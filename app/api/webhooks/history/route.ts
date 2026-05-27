@@ -7,11 +7,11 @@ import { db } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
+    // @ts-expect-error custom session user id
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
+    // @ts-expect-error custom session user id
     const userId = session.user.id;
 
     const deliveries = await db.webhookDelivery.findMany({

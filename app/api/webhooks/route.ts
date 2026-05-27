@@ -7,11 +7,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 async function getAuthenticatedUser() {
   const session = await getServerSession(authOptions);
-
+  // @ts-expect-error custom session user id
   if (!session?.user?.id) {
     return null;
   }
-
+  // @ts-expect-error custom session user id
   return session.user.id;
 }
 

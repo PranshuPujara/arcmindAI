@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
   try {
     // SECURE AUTH — get userId from server session
     const session = await getServerSession(authOptions);
-
+    // @ts-expect-error custom session user id
     const userId = session?.user?.id;
 
     if (!userId) {
