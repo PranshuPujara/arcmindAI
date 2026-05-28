@@ -11,22 +11,31 @@ export function RateLimitBanner({
   secondsLeft,
   totalSeconds,
 }: RateLimitBannerProps) {
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
+  const safeSecondsLeft = Number.isFinite(secondsLeft)
+    ? Math.max(0, Math.floor(secondsLeft))
+    : 0;
+
+  const safeTotalSeconds = Number.isFinite(totalSeconds)
+    ? Math.max(1, Math.floor(totalSeconds))
+    : 1;
+  const clampedSecondsLeft = Math.min(safeSecondsLeft, safeTotalSeconds);
+
+  const minutes = Math.floor(clampedSecondsLeft / 60);
+  const seconds = clampedSecondsLeft % 60;
   const timeDisplay =
     minutes > 0
       ? `${minutes}m ${seconds.toString().padStart(2, "0")}s`
       : `${seconds}s`;
 
-  const progress =
-    totalSeconds > 0
-      ? Math.max(0, Math.min(100, (secondsLeft / totalSeconds) * 100))
-      : 0;
+  const progress = Math.max(
+    0,
+    Math.min(100, (clampedSecondsLeft / safeTotalSeconds) * 100),
+  );
 
   return (
     <div
-      role="alert"
-      aria-live="polite"
+      role="status"
+      aria-live="off"
       className="relative w-full overflow-hidden rounded-lg border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950"
     >
       <div className="flex items-center justify-between gap-4">
@@ -45,7 +54,14 @@ export function RateLimitBanner({
       </div>
 
       {/* Ultra-thin, low-profile progress bar aligned to the very bottom */}
-      <div className="absolute bottom-0 left-0 h-[2px] w-full bg-neutral-100 dark:bg-neutral-900">
+      <div
+        className="absolute bottom-0 left-0 h-[2px] w-full bg-neutral-100 dark:bg-neutral-900"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={safeTotalSeconds}
+        aria-valuenow={clampedSecondsLeft}
+        aria-label="Rate limit cooldown progress"
+      >
         <div
           className="h-full bg-amber-500 transition-all duration-1000 ease-linear dark:bg-amber-400"
           style={{ width: `${progress}%` }}
