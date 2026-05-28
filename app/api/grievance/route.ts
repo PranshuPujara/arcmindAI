@@ -75,21 +75,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const dbStart = Date.now();
-    await db.user.update({
-      where: {
-        // @ts-expect-error id is added to the session in the session callback
-        id: session.user.id,
-      },
-      data: {
-        subscriptionStatus: "cancelled",
-      },
-    });
-    databaseQueryDurationSeconds.observe(
-      { operation: "findFirst" },
-      (Date.now() - dbStart) / 1000,
-    );
-
     // Prepare email data
     const emailData = {
       ...validation.data,
