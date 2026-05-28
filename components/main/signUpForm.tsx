@@ -67,7 +67,11 @@ const SignUpForm = () => {
       }
     } catch (err) {
       setLoading(false);
-      console.error("Signup failed:", err);
+      if (axios.isAxiosError(err) && err.response?.data?.message) {
+        setErrors({ email: err.response.data.message });
+      } else {
+        setErrors({ email: "Something went wrong. Please try again." });
+      }
     }
   };
 
