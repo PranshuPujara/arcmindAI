@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { openAiLLM } from "@/lib/ai/helperClient";
 import {
   GITHUB_AI_SUGGEST_PROMPT,
@@ -15,6 +17,15 @@ import {
 export async function POST(req: NextRequest) {
   const route = "/api/github-generation/[id]/improve-diagram";
   const method = "POST";
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    httpRequestsTotal.inc({ route, method, status_code: "401" });
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
   let aiRequested = false;
   let aiFailureRecorded = false;
 
