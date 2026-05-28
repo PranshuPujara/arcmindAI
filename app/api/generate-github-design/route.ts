@@ -16,6 +16,7 @@ import {
   databaseQueryDurationSeconds,
   httpRequestsTotal,
 } from "@/lib/metrics";
+import { sendWebhook } from "@/lib/webhooks/sendWebhook";
 
 interface GenerateGithubDesignRequest {
   owner: string;
@@ -35,6 +36,7 @@ interface MessageChunk {
   [key: string]: unknown;
 }
 
+let userId: string | undefined; // to get userId in catch block for webhook notification on failure, will be set in try block before any await calls
 export async function POST(request: NextRequest) {
   const route = "/api/generate-github-design";
   const method = "POST";
@@ -44,8 +46,8 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions);
-    // @ts-expect-error id is added to session in NextAuth callbacks
-    const userId = session?.user?.id;
+    // @ts-expect-error custom session user id
+    userId = session?.user?.id;
 
     if (!userId) {
       httpRequestsTotal.inc({ route, method, status_code: "401" });
@@ -208,7 +210,7 @@ export async function POST(request: NextRequest) {
             data: {
               userInput: repoIdentifier,
               githubGeneration: mermaidDiagram,
-              userId,
+              userId: userId!,
             },
           });
           databaseQueryDurationSeconds.observe(
@@ -217,7 +219,15 @@ export async function POST(request: NextRequest) {
           );
 
           aiGenerationSuccessTotal.inc();
-
+          // Send webhook notification for successful generation
+          await sendWebhook({
+            userId: userId!,
+            event: "generation.success",
+            data: {
+              repository: repoIdentifier,
+              mermaidDiagram,
+            },
+          });
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
@@ -246,6 +256,7 @@ export async function POST(request: NextRequest) {
     });
 
     httpRequestsTotal.inc({ route, method, status_code: "200" });
+
     return new Response(readable, {
       headers: {
         "Content-Type": "text/event-stream",
@@ -259,6 +270,21 @@ export async function POST(request: NextRequest) {
     }
     console.error("GitHub design generation error:", error);
     httpRequestsTotal.inc({ route, method, status_code: "500" });
+
+    // Send webhook notification for failed generation
+    if (userId) {
+      await sendWebhook({
+        userId,
+        event: "generation.failed",
+        data: {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unknown GitHub generation error",
+        },
+      });
+    }
+
     return NextResponse.json(
       {
         success: false,
