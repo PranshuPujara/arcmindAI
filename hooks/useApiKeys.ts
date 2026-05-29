@@ -18,17 +18,27 @@ function parseErrorMessage(err: unknown, defaultMessage: string): string {
 }
 
 export function useApiKeys() {
+  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus | null>(null);
+  // Status loading/refreshing
   const [isLoading, setIsLoading] = useState(false);
+  // A save/delete request that mutates the status
+  const [isMutating, setIsMutating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getApiKeyStatus = async (): Promise<ApiKeyStatus | null> => {
+  const fetchStatus = async (): Promise<void> => {
+    const response = await axios.get(DOC_ROUTES.API.USER_API_KEYS);
+    setApiKeyStatus(response?.data as ApiKeyStatus);
+  };
+
+  const refreshApiKeyStatus = async (): Promise<void> => {
+    setIsLoading(true);
     setError(null);
     try {
-      const response = await axios.get(DOC_ROUTES.API.USER_API_KEYS);
-      return response.data as ApiKeyStatus;
+      await fetchStatus();
     } catch (err) {
       setError(parseErrorMessage(err, "Failed to load API key status"));
-      return null;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -36,36 +46,46 @@ export function useApiKeys() {
     geminiApiKey?: string;
     openaiApiKey?: string;
   }): Promise<Response> => {
-    setIsLoading(true);
+    setIsMutating(true);
     setError(null);
     try {
       const response = await axios.post(DOC_ROUTES.API.USER_API_KEYS, keys);
+      await fetchStatus();
       return { success: !!response.data?.success };
     } catch (err) {
       const message = parseErrorMessage(err, "Failed to save API keys");
       setError(message);
       return { success: false, message };
     } finally {
-      setIsLoading(false);
+      setIsMutating(false);
     }
   };
 
   const deleteApiKey = async (provider: APIKeyProvider): Promise<Response> => {
-    setIsLoading(true);
+    setIsMutating(true);
     setError(null);
     try {
       const response = await axios.delete(DOC_ROUTES.API.USER_API_KEYS, {
         params: { provider },
       });
+      await fetchStatus();
       return { success: !!response.data?.success };
     } catch (err) {
       const message = parseErrorMessage(err, "Failed to remove API key");
       setError(message);
       return { success: false, message };
     } finally {
-      setIsLoading(false);
+      setIsMutating(false);
     }
   };
 
-  return { getApiKeyStatus, saveApiKeys, deleteApiKey, isLoading, error };
+  return {
+    apiKeyStatus,
+    refreshApiKeyStatus,
+    saveApiKeys,
+    deleteApiKey,
+    isLoading,
+    isMutating,
+    error,
+  };
 }
