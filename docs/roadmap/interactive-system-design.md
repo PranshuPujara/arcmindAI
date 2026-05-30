@@ -16,8 +16,9 @@ This milestone aims to replace the current static Mermaid.js-based architecture 
 2. **[DIAG-02] Implement Mermaid-to-JSON Parser Logic**
    - **Goal:** Convert existing AI Mermaid strings into the new JSON schema.
    - **File:** `lib/utils/diagram-parser.ts`
-3. **[DIAG-03] Update API Response Schema**
-   - **Goal:** Modify `/api/generate` to return the new JSON structure alongside Mermaid.
+3. **[DIAG-03] Integrate Parser into Frontend Hooks (Client-Side)**
+   - **Goal:** Run the parser on the frontend whenever a new Mermaid string is generated, storing the JSON in React state.
+   - **Note:** Do NOT replace the existing Mermaid viewer yet. Run this logic in the background to prepare data for the upcoming D3 canvas.
 4. **[DIAG-04] Create Diagram State Provider (React Context)**
    - **Goal:** Manage global diagram state (selection, filtering, search).
    - **File:** `context/DiagramContext.tsx`
@@ -26,6 +27,7 @@ This milestone aims to replace the current static Mermaid.js-based architecture 
 
 5. **[DIAG-05] Setup D3 SVG Canvas & Responsive Wrapper**
    - **Goal:** Implement the base component that scales to parent containers.
+   - **Note:** Render this component below the existing Mermaid diagram (or hidden behind a dev toggle) to ensure no disruption to current users.
 6. **[DIAG-06] Implement D3 Force-Directed Simulation**
    - **Goal:** Physics-based layout for nodes and links.
 7. **[DIAG-07] Implement Zoom, Pan, and Reset UI**
