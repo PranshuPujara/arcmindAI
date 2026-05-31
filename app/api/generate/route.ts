@@ -333,7 +333,7 @@ export async function POST(req: NextRequest) {
 
           const createStart = Date.now();
 
-          await db.generation.create({
+          const savedGeneration = await db.generation.create({
             data: {
               userInput,
               generatedOutput: parsedData,
@@ -366,6 +366,7 @@ export async function POST(req: NextRequest) {
               `data: ${JSON.stringify({
                 done: true,
                 parsedData,
+                generationId: savedGeneration.id,
                 limit,
                 remaining,
                 reset,
