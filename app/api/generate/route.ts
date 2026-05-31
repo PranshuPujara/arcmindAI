@@ -7,7 +7,6 @@ import { generationRateLimits } from "@/lib/rateLimit";
 import { getUserApiKeys } from "@/lib/api-keys/getUserApiKeys";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { Prisma } from "@prisma/client";
 import {
   aiGenerationRequestsTotal,
   aiGenerationSuccessTotal,
@@ -225,6 +224,7 @@ export async function POST(req: NextRequest) {
   httpRequestsTotal.inc({ route, method });
 
   let userId: string | undefined;
+  let savedGeneration: { id: string } | null = null; // to capture the generation ID for rating use
 
   try {
     const session = await getServerSession(authOptions);
@@ -433,13 +433,13 @@ export async function POST(req: NextRequest) {
           if (!isGuest) {
             const createStart = Date.now();
 
-          const savedGeneration = await db.generation.create({
-            data: {
-              userInput,
-              generatedOutput: parsedData as Prisma.InputJsonValue,
-              userId: userId as string,
-            },
-          });
+            savedGeneration = await db.generation.create({
+              data: {
+                userInput,
+                generatedOutput: parsedData as Prisma.InputJsonValue,
+                userId: userId as string,
+              },
+            });
 
             databaseQueryDurationSeconds.observe(
               { operation: "create" },
@@ -485,7 +485,7 @@ export async function POST(req: NextRequest) {
               `data: ${JSON.stringify({
                 done: true,
                 parsedData,
-                generationId: savedGeneration.id,
+                generationId: savedGeneration?.id,
                 limit,
                 remaining,
                 reset,
