@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { ArchitectureData } from "../utils/types";
 import { useGenerateSystem } from "../hooks/useGenerateSystem";
+import StarRating from "@/components/ui/star-rating";
 
 import { useHistory } from "@/lib/contexts/HistoryContext";
 import Lottie from "lottie-react";
@@ -41,6 +42,11 @@ export default function GeneratePage() {
   const [generatedData, setGeneratedData] = useState<ArchitectureData | null>(
     null,
   );
+  // Track generation ID for rating purposes after generation completes
+  const [generationId, setGenerationId] = useState<string | null>(null);
+  const [rating, setRating] = useState<number>(0);
+  const [isRatingLoading, setIsRatingLoading] = useState(false);
+
   const [streamingProgress, setStreamingProgress] = useState<string>("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -124,6 +130,11 @@ export default function GeneratePage() {
       console.log("FULL RESULT:", result);
 
       if (result && result.success) {
+        // store generation ID for later rating
+        if (result.generationId) {
+          setGenerationId(result.generationId);
+        }
+
         if (result.parsedData) {
           setGeneratedData(result.parsedData);
         } else {
@@ -217,6 +228,34 @@ export default function GeneratePage() {
     } catch (error) {
       console.error("Generation failed:", error);
       setGeneratedData(null);
+    }
+  };
+
+  // Handle user rating submission
+  const handleRate = async (value: number) => {
+    if (!generationId || isRatingLoading) return;
+
+    try {
+      setIsRatingLoading(true);
+      setRating(value);
+
+      const response = await fetch(`/api/generate/${generationId}/rate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rating: value,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save rating");
+      }
+    } catch (error) {
+      console.error("Failed to save rating:", error);
+    } finally {
+      setIsRatingLoading(false);
     }
   };
 
@@ -542,6 +581,18 @@ export default function GeneratePage() {
               <p className="text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
                 {generatedData.summary}
               </p>
+              {/* Added Rating Component */}
+              <div className="flex flex-col items-center gap-2 pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Rate this architecture generation
+                </p>
+                <StarRating
+                  rating={rating}
+                  onRate={handleRate}
+                  disabled={isRatingLoading}
+                  size={24}
+                />
+              </div>
             </div>
             {/* Primary actions: Export PDF visible immediately after generation */}
             <div className="flex justify-center items-center gap-3 mt-4">

@@ -7,6 +7,7 @@ interface GenerateResponse {
   success: boolean;
   output: string;
   parsedData?: ArchitectureData;
+  generationId?: string;
   limit?: number;
   remaining?: number;
   reset?: string;
@@ -71,6 +72,7 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
       let output = "";
       let buffer = "";
       let parsedData = null;
+      let generationId: string | undefined = undefined;
       let limitInfo = {
         limit: undefined,
         remaining: undefined,
@@ -107,6 +109,8 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
 
               if (parsed.done) {
                 if (parsed.parsedData) parsedData = parsed.parsedData;
+                if (parsed.generationId) generationId = parsed.generationId;
+
                 limitInfo = {
                   limit: parsed.limit,
                   remaining: parsed.remaining,
@@ -134,6 +138,7 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
         success: true,
         output,
         parsedData,
+        generationId,
         ...limitInfo,
       };
 
