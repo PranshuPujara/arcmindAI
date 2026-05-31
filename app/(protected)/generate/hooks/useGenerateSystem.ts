@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { DOC_ROUTES } from "@/lib/routes";
 import { ArchitectureData } from "../utils/types";
+import { parseMermaidToJSON } from "@/lib/utils/diagram-parser";
+import { SystemGraph } from "@/types/diagram";
 
 interface GenerateResponse {
   success: boolean;
@@ -18,6 +20,7 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
+  const [d3GraphData, setD3GraphData] = useState<SystemGraph | null>(null);
 
   const generate = async (
     userInput: string,
@@ -140,6 +143,17 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
         ...limitInfo,
       };
 
+      // DIAG-03: Parse Mermaid output into D3-compatible JSON
+      // Existing mermaid string state is preserved — d3GraphData coexists
+      if (output?.trim()) {
+        try {
+          const parsed = parseMermaidToJSON(output);
+          setD3GraphData(parsed);
+        } catch (parseErr) {
+          console.warn("[DIAG-03] Mermaid parse failed:", parseErr);
+        }
+      }
+
       // Refetch history only for logged-in users after successful generation
       // @ts-expect-error id is added to session in NextAuth callbacks
       if (data.success && refetchHistory && session?.user?.id) {
@@ -169,5 +183,6 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
     isLoading,
     error,
     retryAfter,
+    d3GraphData,
   };
 }
