@@ -77,7 +77,9 @@ export async function POST(
       });
     }
 
-    if (user?.plan == "free") {
+    const isPro =
+      user?.plan !== "free" || !!user?.geminiApiKey || !!user?.openaiApiKey;
+    if (!isPro) {
       httpRequestsTotal.inc({ route, method, status_code: "401" });
       apiGatewayErrorsTotal.inc({ status_code: "401" });
       end();

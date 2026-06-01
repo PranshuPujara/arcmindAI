@@ -294,7 +294,9 @@ export async function PUT(
       );
     }
 
-    if (user?.plan !== "pro" && user?.plan !== "enterprise") {
+    const isPro =
+      user?.plan !== "free" || !!user?.geminiApiKey || !!user?.openaiApiKey;
+    if (!isPro) {
       apiGatewayErrorsTotal.inc({ status_code: "401" });
       httpRequestDurationSeconds.observe(
         { route },
