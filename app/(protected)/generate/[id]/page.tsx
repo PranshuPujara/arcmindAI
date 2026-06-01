@@ -9,6 +9,7 @@ import { useGetGenerationById } from "../hooks/useGetGenerationById";
 import { useDeleteGenerationById } from "../hooks/useDeleteGenerationById";
 import { useUpdateGeneration } from "@/hooks/useUpdateGeneration";
 import { useHistory } from "@/lib/contexts/HistoryContext";
+import { DiagramProvider } from "@/lib/contexts/DiagramContext";
 import { downloadMarkdownFile } from "../utils/generate-markdown";
 import { toast } from "sonner";
 import {
@@ -45,7 +46,8 @@ import { cleanMermaidString } from "../utils/cleanMermaidString";
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-export default function GenerationPage() {
+// wrapped around a function to better organize the code and separate the provider logic from the page content
+function GenerationPageContent() {
   const { id } = useParams();
   const router = useRouter();
   const { getGenerationById, isLoading, error } = useGetGenerationById();
@@ -586,5 +588,13 @@ export default function GenerationPage() {
         </div>
       </div>
     </div>
+  );
+}
+// The main page component that wraps the content with the DiagramProvider to provide context to all child components.
+export default function GenerationPage() {
+  return (
+    <DiagramProvider>
+      <GenerationPageContent />
+    </DiagramProvider>
   );
 }
