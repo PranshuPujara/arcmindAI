@@ -348,10 +348,30 @@ export default function GeneratePage() {
     }
   };
 
+  // Keep latest state in a ref for the event listener to avoid constant re-binding
+  const shortcutStateRef = useRef({
+    isLoading,
+    isRateLimited,
+    isGuestLocked,
+    userInput,
+    handleGenerate,
+  });
+
+  useEffect(() => {
+    shortcutStateRef.current = {
+      isLoading,
+      isRateLimited,
+      isGuestLocked,
+      userInput,
+      handleGenerate,
+    };
+  });
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const metaOrCtrl = e.metaKey || e.ctrlKey;
+      const state = shortcutStateRef.current;
 
       // Cmd/Ctrl + Enter -> submit (works while typing too)
       if (metaOrCtrl && e.key === "Enter") {
@@ -359,13 +379,13 @@ export default function GeneratePage() {
         // Allow generation even when focused inside textarea/input
         e.preventDefault();
         if (
-          !isLoading &&
-          !isRateLimited &&
-          !isGuestLocked &&
-          userInput.trim()
+          !state.isLoading &&
+          !state.isRateLimited &&
+          !state.isGuestLocked &&
+          state.userInput.trim()
         ) {
-          void handleGenerate();
-        } else if (isGuestLocked) {
+          void state.handleGenerate();
+        } else if (state.isGuestLocked) {
           setIsGuestPromptOpen(true);
         }
         return;
@@ -391,14 +411,7 @@ export default function GeneratePage() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    handleGenerate,
-    isLoading,
-    isRateLimited,
-    isGuestLocked,
-    userInput,
-    promptFocusRef,
-  ]);
+  }, [promptFocusRef]);
 
   // Handle user rating submission
   const handleRate = async (value: number) => {
@@ -494,57 +507,32 @@ export default function GeneratePage() {
                         {userInput.length} / {MAX_INPUT_LENGTH}
                       </p>
 
-                      {/* Polished shortcut hint: keycap-style pills with tooltip and accessible text */}
+                      {/* Polished shortcut hint: minimal and subtle */}
                       <div
-                        className="ml-2 flex items-center gap-2"
-                        title="Keyboard shortcuts: Cmd/Ctrl+Enter to generate; Cmd/Ctrl+K to focus editor"
-                        aria-hidden={false}
+                        className="hidden sm:flex ml-3 items-center gap-4 text-[11px] text-muted-foreground/60 select-none"
+                        title="Shortcuts: Cmd/Ctrl+Enter to submit, Cmd/Ctrl+K to focus"
                       >
-                        <div className="hidden sm:flex items-center gap-2">
-                          <span
-                            className="inline-flex items-center gap-3 bg-muted/10 border border-border rounded px-3 py-1 text-[12px] text-muted-foreground"
-                            title="Submit: Cmd/Ctrl + Enter"
-                            role="group"
-                            aria-label="Submit shortcut: Command or Control plus Enter"
-                          >
-                            <div className="flex flex-col leading-none">
-                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                                Submit
-                              </span>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <span className="font-medium">⌘ / Ctrl</span>
-                                <span className="opacity-60">+</span>
-                                <kbd className="bg-background border px-1 rounded text-[12px]">
-                                  Enter
-                                </kbd>
-                              </div>
-                            </div>
+                        <div className="flex items-center gap-1.5 transition-colors hover:text-muted-foreground/90">
+                          <span className="flex items-center gap-0.5">
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              ⌘
+                            </kbd>
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              Enter
+                            </kbd>
                           </span>
-
-                          <span
-                            className="inline-flex items-center gap-3 bg-muted/10 border border-border rounded px-3 py-1 text-[12px] text-muted-foreground"
-                            title="Focus: Cmd/Ctrl + K"
-                            role="group"
-                            aria-label="Focus shortcut: Command or Control plus K"
-                          >
-                            <div className="flex flex-col leading-none">
-                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-                                Focus
-                              </span>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <span className="font-medium">⌘ / Ctrl</span>
-                                <span className="opacity-60">+</span>
-                                <kbd className="bg-background border px-1 rounded text-[12px]">
-                                  K
-                                </kbd>
-                              </div>
-                            </div>
-                          </span>
+                          <span>to submit</span>
                         </div>
-
-                        {/* Fallback readable string for very small screens */}
-                        <div className="sm:hidden text-xs text-muted-foreground/70 select-none">
-                          Submit: ⌘/Ctrl + Enter · Focus: ⌘/Ctrl + K
+                        <div className="flex items-center gap-1.5 transition-colors hover:text-muted-foreground/90">
+                          <span className="flex items-center gap-0.5">
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              ⌘
+                            </kbd>
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              K
+                            </kbd>
+                          </span>
+                          <span>to focus</span>
                         </div>
                       </div>
                     </div>
