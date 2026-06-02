@@ -91,10 +91,7 @@ export async function POST(req: NextRequest) {
 
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
-      return NextResponse.json(
-        { message: passwordError },
-        { status: 400 },
-      );
+      return NextResponse.json({ message: passwordError }, { status: 400 });
     }
 
     const newHashedPassword = await bcrypt.hash(newPassword, 10);
