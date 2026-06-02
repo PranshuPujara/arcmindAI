@@ -31,7 +31,7 @@ export default function InteractiveDiagram() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Initialize and update the SVG viewBox and placeholder content
+  // Initialize and update the SVG viewBox and force-directed graph
   useEffect(() => {
     if (!svgRef.current || dimensions.width === 0 || dimensions.height === 0)
       return;
@@ -41,51 +41,135 @@ export default function InteractiveDiagram() {
     // Update viewBox dynamically to match dimensions
     svg.attr("viewBox", `0 0 ${dimensions.width} ${dimensions.height}`);
 
-    // Initial placeholder rendering logic
-    // Clear previous elements (important for hot-reloading or manual updates)
+    // Clear previous elements before rendering the force-directed graph
     svg.selectAll("*").remove();
 
-    // Background rect to capture events (useful for future pan/zoom)
-    svg
-      .append("rect")
-      .attr("width", dimensions.width)
-      .attr("height", dimensions.height)
-      .attr("fill", "transparent");
+    // Temporary graph data used to validate the D3 force simulation.
+    // This will be replaced by actual architecture nodes in future diagram-rendering tasks.
+    type DiagramNode = d3.SimulationNodeDatum & {
+      id: string;
+    };
+    type DiagramLink = d3.SimulationLinkDatum<DiagramNode>;
+    const nodes: DiagramNode[] = [
+      { id: "Frontend" },
+      { id: "CDN" },
+      { id: "Load Balancer" },
+      { id: "API Gateway" },
+      { id: "Auth Service" },
+      { id: "Backend" },
+      { id: "Notification Service" },
+      { id: "Database" },
+      { id: "Cache" },
+      { id: "Queue" },
+      { id: "Worker" },
+      { id: "Object Storage" },
+      { id: "Third-Party API" },
+      { id: "Monitoring" },
+    ];
 
-    // Placeholder content
+    const links: DiagramLink[] = [
+      { source: "Frontend", target: "CDN" },
+      { source: "Frontend", target: "Load Balancer" },
+
+      { source: "Load Balancer", target: "API Gateway" },
+
+      { source: "API Gateway", target: "Auth Service" },
+      { source: "API Gateway", target: "Backend" },
+
+      { source: "Auth Service", target: "Database" },
+      { source: "Auth Service", target: "Monitoring" },
+
+      { source: "Backend", target: "Database" },
+      { source: "Backend", target: "Cache" },
+      { source: "Backend", target: "Queue" },
+      { source: "Backend", target: "Object Storage" },
+      { source: "Backend", target: "Notification Service" },
+      { source: "Backend", target: "Third-Party API" },
+      { source: "Backend", target: "Monitoring" },
+
+      { source: "Worker", target: "Queue" },
+      { source: "Worker", target: "Database" },
+      { source: "Worker", target: "Object Storage" },
+      { source: "Worker", target: "Monitoring" },
+
+      { source: "Notification Service", target: "Third-Party API" },
+      { source: "Notification Service", target: "Monitoring" },
+    ];
+
     const g = svg.append("g");
 
-    g.append("text")
-      .attr("x", dimensions.width / 2)
-      .attr("y", dimensions.height / 2)
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "middle")
-      .attr("fill", "currentColor")
-      .attr("class", "text-muted-foreground opacity-50 text-sm font-mono")
-      .text("D3 Canvas Initialized");
-
-    g.append("text")
-      .attr("x", dimensions.width / 2)
-      .attr("y", dimensions.height / 2 + 25)
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "middle")
-      .attr("fill", "currentColor")
-      .attr("class", "text-muted-foreground/30 text-[10px] font-mono")
-      .text(
-        `${Math.round(dimensions.width)}px x ${Math.round(dimensions.height)}px`,
-      );
-
-    // Draw a subtle border inside the SVG to visualize the bounds
-    g.append("rect")
-      .attr("x", 10)
-      .attr("y", 10)
-      .attr("width", dimensions.width - 20)
-      .attr("height", dimensions.height - 20)
-      .attr("fill", "none")
+    const link = g
+      .selectAll("line")
+      .data(links)
+      .enter()
+      .append("line")
       .attr("stroke", "currentColor")
-      .attr("stroke-width", 1)
-      .attr("stroke-dasharray", "4,4")
-      .attr("class", "text-border/20");
+      .attr("stroke-opacity", 0.4)
+      .attr("stroke-width", 2);
+
+    const node = g
+      .selectAll("circle")
+      .data(nodes)
+      .enter()
+      .append("circle")
+      .attr("r", 20)
+      .attr("fill", "currentColor")
+      .attr("opacity", 0.8);
+
+    const label = g
+      .selectAll("text")
+      .data(nodes)
+      .enter()
+      .append("text")
+      .text((d) => d.id)
+      .attr("font-size", 12)
+      .attr("text-anchor", "middle")
+      .attr("dy", 35)
+      .attr("fill", "currentColor");
+
+    // Initialize the physics engine
+    const simulation = d3
+      .forceSimulation<DiagramNode>(nodes)
+      .force(
+        "link",
+        d3
+          .forceLink<DiagramNode, DiagramLink>(links)
+          .id((d) => d.id)
+          .distance(150),
+      )
+      .force("charge", d3.forceManyBody().strength(-1000))
+      .force("collision", d3.forceCollide(60))
+      .force(
+        "center",
+        d3.forceCenter(dimensions.width / 2, dimensions.height / 2),
+      )
+      .force("x", d3.forceX(dimensions.width / 2).strength(0.05))
+      .force("y", d3.forceY(dimensions.height / 2).strength(0.05));
+
+    simulation.on("tick", () => {
+      link
+        .attr("x1", (d: DiagramLink) => (d.source as DiagramNode).x ?? 0)
+        .attr("y1", (d: DiagramLink) => (d.source as DiagramNode).y ?? 0)
+        .attr("x2", (d: DiagramLink) => (d.target as DiagramNode).x ?? 0)
+        .attr("y2", (d: DiagramLink) => (d.target as DiagramNode).y ?? 0);
+
+      node
+        .attr("cx", (d: DiagramNode) => d.x ?? 0)
+        .attr("cy", (d: DiagramNode) => d.y ?? 0);
+
+      label
+        .attr("x", (d: DiagramNode) => d.x ?? 0)
+        .attr("y", (d: DiagramNode) => d.y ?? 0);
+    });
+
+    simulation.on("end", () => {
+      simulation.stop();
+    });
+
+    // Clean up the simulation on unmount
+    return () => {
+      simulation.stop();
+    };
   }, [dimensions]);
 
   if (!isD3Enabled) return null;
