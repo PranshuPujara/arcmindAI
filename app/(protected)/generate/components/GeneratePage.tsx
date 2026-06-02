@@ -31,6 +31,9 @@ import EntitiesSection from "./EntitiesSection";
 import InfrastructureSection from "./InfrastructureSection";
 import MermaidDiagram from "./mermaidDiagram";
 import MicroservicesSection from "./MicroservicesSection";
+import InteractiveDiagram from "@/components/diagram/InteractiveDiagram";
+import { useDiagram } from "@/lib/contexts/DiagramContext";
+import { Switch } from "@/components/ui/switch";
 
 const GUEST_GENERATION_STORAGE_KEY = "arcmind.guest.generations.used";
 const GUEST_GENERATION_COOKIE_KEY = "arcmind_guest_generations_used";
@@ -67,6 +70,8 @@ export default function GeneratePage() {
   const promptFocusRef = textareaRef;
 
   const userInput = watch("userInput", "");
+
+  const { isD3Enabled, setIsD3Enabled } = useDiagram();
 
   const { data: session, status } = useSession();
   const [guestGenerationsUsed, setGuestGenerationsUsed] = useState(0);
@@ -403,7 +408,7 @@ export default function GeneratePage() {
           try {
             el.setSelectionRange(len, len);
           } catch (err) {
-            // ignore if not supported
+            console.error("Failed to set selection range:", err);
           }
         }
       }
@@ -977,6 +982,16 @@ export default function GeneratePage() {
                     </h2>
                   </div>
                   <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-muted/50 rounded-xl border border-border/40 transition-all hover:bg-muted">
+                      <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-tight">
+                        D3 Alpha
+                      </span>
+                      <Switch
+                        checked={isD3Enabled}
+                        onCheckedChange={setIsD3Enabled}
+                        className="scale-75"
+                      />
+                    </div>
                     <CopyDiagramButton
                       code={cleanMermaidString(
                         generatedData["Architecture Diagram"],
@@ -1001,6 +1016,21 @@ export default function GeneratePage() {
                     )}
                   />
                 </div>
+              </section>
+            )}
+
+            {/* Interactive D3 Diagram (Stream 2) */}
+            {isD3Enabled && (
+              <section className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-primary/20">
+                    BETA
+                  </div>
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Interactive Canvas
+                  </h2>
+                </div>
+                <InteractiveDiagram />
               </section>
             )}
           </div>

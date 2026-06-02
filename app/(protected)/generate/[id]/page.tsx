@@ -36,6 +36,9 @@ import {
   FrontendStructureDialog,
   TaskGenerationDialog,
 } from "../components";
+import InteractiveDiagram from "@/components/diagram/InteractiveDiagram";
+import { useDiagram } from "@/lib/contexts/DiagramContext";
+import { Switch } from "@/components/ui/switch";
 
 import Lottie from "lottie-react";
 import animationData from "@/components/loaderLottie.json";
@@ -62,6 +65,7 @@ function GenerationPageContent() {
     error: updateError,
   } = useUpdateGeneration();
   const { refetch } = useHistory();
+  const { isD3Enabled, setIsD3Enabled } = useDiagram();
 
   const [generatedData, setGeneratedData] = useState<ArchitectureData | null>(
     null,
@@ -338,6 +342,16 @@ function GenerationPageContent() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-muted/50 rounded-xl border border-border/40 transition-all hover:bg-muted">
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-tight">
+                      D3 Alpha
+                    </span>
+                    <Switch
+                      checked={isD3Enabled}
+                      onCheckedChange={setIsD3Enabled}
+                      className="scale-75"
+                    />
+                  </div>
                   <CopyDiagramButton code={cleanedGithubDiagram} />
                 </div>
               </div>
@@ -348,6 +362,21 @@ function GenerationPageContent() {
                 <MermaidDiagram chart={cleanedGithubDiagram} />
               </div>
             </section>
+
+            {/* Interactive D3 Diagram (Stream 2) */}
+            {isD3Enabled && (
+              <section className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-primary/20">
+                    BETA
+                  </div>
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Interactive Canvas
+                  </h2>
+                </div>
+                <InteractiveDiagram />
+              </section>
+            )}
           </div>
         </div>
       </div>
@@ -574,6 +603,16 @@ function GenerationPageContent() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-muted/50 rounded-xl border border-border/40 transition-all hover:bg-muted">
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-tight">
+                      D3 Alpha
+                    </span>
+                    <Switch
+                      checked={isD3Enabled}
+                      onCheckedChange={setIsD3Enabled}
+                      className="scale-75"
+                    />
+                  </div>
                   <CopyDiagramButton code={cleanedDiagram} />
                 </div>
               </div>
@@ -583,6 +622,21 @@ function GenerationPageContent() {
               >
                 <MermaidDiagram chart={cleanedDiagram} />
               </div>
+            </section>
+          )}
+
+          {/* Interactive D3 Diagram (Stream 2) */}
+          {isD3Enabled && (
+            <section className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-primary/20">
+                  BETA
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">
+                  Interactive Canvas
+                </h2>
+              </div>
+              <InteractiveDiagram />
             </section>
           )}
         </div>
