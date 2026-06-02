@@ -63,6 +63,8 @@ export default function GeneratePage() {
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
   const submittedTextRef = useRef<string>("");
+  // ref for keyboard focus shortcut
+  const promptFocusRef = textareaRef;
 
   const userInput = watch("userInput", "");
 
@@ -346,6 +348,58 @@ export default function GeneratePage() {
     }
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const metaOrCtrl = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl + Enter -> submit (works while typing too)
+      if (metaOrCtrl && e.key === "Enter") {
+        // Ensure we don't trigger while modifier keys are part of other OS shortcuts
+        // Allow generation even when focused inside textarea/input
+        e.preventDefault();
+        if (
+          !isLoading &&
+          !isRateLimited &&
+          !isGuestLocked &&
+          userInput.trim()
+        ) {
+          void handleGenerate();
+        } else if (isGuestLocked) {
+          setIsGuestPromptOpen(true);
+        }
+        return;
+      }
+
+      // Cmd/Ctrl + K -> focus prompt editor
+      if (metaOrCtrl && e.key.toLowerCase() === "k") {
+        // Don't steal focus if a modal or input expects a special combo
+        const el = promptFocusRef.current;
+        if (el) {
+          e.preventDefault();
+          el.focus();
+          // Move cursor to end
+          const len = el.value?.length ?? 0;
+          try {
+            el.setSelectionRange(len, len);
+          } catch (err) {
+            // ignore if not supported
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    handleGenerate,
+    isLoading,
+    isRateLimited,
+    isGuestLocked,
+    userInput,
+    promptFocusRef,
+  ]);
+
   // Handle user rating submission
   const handleRate = async (value: number) => {
     if (!generationId || isRatingLoading) return;
@@ -439,6 +493,60 @@ export default function GeneratePage() {
                       >
                         {userInput.length} / {MAX_INPUT_LENGTH}
                       </p>
+
+                      {/* Polished shortcut hint: keycap-style pills with tooltip and accessible text */}
+                      <div
+                        className="ml-2 flex items-center gap-2"
+                        title="Keyboard shortcuts: Cmd/Ctrl+Enter to generate; Cmd/Ctrl+K to focus editor"
+                        aria-hidden={false}
+                      >
+                        <div className="hidden sm:flex items-center gap-2">
+                          <span
+                            className="inline-flex items-center gap-3 bg-muted/10 border border-border rounded px-3 py-1 text-[12px] text-muted-foreground"
+                            title="Submit: Cmd/Ctrl + Enter"
+                            role="group"
+                            aria-label="Submit shortcut: Command or Control plus Enter"
+                          >
+                            <div className="flex flex-col leading-none">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                                Submit
+                              </span>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="font-medium">⌘ / Ctrl</span>
+                                <span className="opacity-60">+</span>
+                                <kbd className="bg-background border px-1 rounded text-[12px]">
+                                  Enter
+                                </kbd>
+                              </div>
+                            </div>
+                          </span>
+
+                          <span
+                            className="inline-flex items-center gap-3 bg-muted/10 border border-border rounded px-3 py-1 text-[12px] text-muted-foreground"
+                            title="Focus: Cmd/Ctrl + K"
+                            role="group"
+                            aria-label="Focus shortcut: Command or Control plus K"
+                          >
+                            <div className="flex flex-col leading-none">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                                Focus
+                              </span>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="font-medium">⌘ / Ctrl</span>
+                                <span className="opacity-60">+</span>
+                                <kbd className="bg-background border px-1 rounded text-[12px]">
+                                  K
+                                </kbd>
+                              </div>
+                            </div>
+                          </span>
+                        </div>
+
+                        {/* Fallback readable string for very small screens */}
+                        <div className="sm:hidden text-xs text-muted-foreground/70 select-none">
+                          Submit: ⌘/Ctrl + Enter · Focus: ⌘/Ctrl + K
+                        </div>
+                      </div>
                     </div>
 
                     <Button
