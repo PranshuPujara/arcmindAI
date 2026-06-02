@@ -63,6 +63,8 @@ export default function GeneratePage() {
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
   const submittedTextRef = useRef<string>("");
+  // ref for keyboard focus shortcut
+  const promptFocusRef = textareaRef;
 
   const userInput = watch("userInput", "");
 
@@ -346,6 +348,71 @@ export default function GeneratePage() {
     }
   };
 
+  // Keep latest state in a ref for the event listener to avoid constant re-binding
+  const shortcutStateRef = useRef({
+    isLoading,
+    isRateLimited,
+    isGuestLocked,
+    userInput,
+    handleGenerate,
+  });
+
+  useEffect(() => {
+    shortcutStateRef.current = {
+      isLoading,
+      isRateLimited,
+      isGuestLocked,
+      userInput,
+      handleGenerate,
+    };
+  });
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const metaOrCtrl = e.metaKey || e.ctrlKey;
+      const state = shortcutStateRef.current;
+
+      // Cmd/Ctrl + Enter -> submit (works while typing too)
+      if (metaOrCtrl && e.key === "Enter") {
+        // Ensure we don't trigger while modifier keys are part of other OS shortcuts
+        // Allow generation even when focused inside textarea/input
+        e.preventDefault();
+        if (
+          !state.isLoading &&
+          !state.isRateLimited &&
+          !state.isGuestLocked &&
+          state.userInput.trim()
+        ) {
+          void state.handleGenerate();
+        } else if (state.isGuestLocked) {
+          setIsGuestPromptOpen(true);
+        }
+        return;
+      }
+
+      // Cmd/Ctrl + K -> focus prompt editor
+      if (metaOrCtrl && e.key.toLowerCase() === "k") {
+        // Don't steal focus if a modal or input expects a special combo
+        const el = promptFocusRef.current;
+        if (el) {
+          e.preventDefault();
+          el.focus();
+          // Move cursor to end
+          const len = el.value?.length ?? 0;
+          try {
+            el.setSelectionRange(len, len);
+          } catch (err) {
+            // ignore if not supported
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [promptFocusRef]);
+
   // Handle user rating submission
   const handleRate = async (value: number) => {
     if (!generationId || isRatingLoading) return;
@@ -439,6 +506,35 @@ export default function GeneratePage() {
                       >
                         {userInput.length} / {MAX_INPUT_LENGTH}
                       </p>
+
+                      {/* Polished shortcut hint: minimal and subtle */}
+                      <div
+                        className="hidden sm:flex ml-3 items-center gap-4 text-[11px] text-muted-foreground/60 select-none"
+                        title="Shortcuts: Cmd/Ctrl+Enter to submit, Cmd/Ctrl+K to focus"
+                      >
+                        <div className="flex items-center gap-1.5 transition-colors hover:text-muted-foreground/90">
+                          <span className="flex items-center gap-0.5">
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              ⌘
+                            </kbd>
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              Enter
+                            </kbd>
+                          </span>
+                          <span>to submit</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 transition-colors hover:text-muted-foreground/90">
+                          <span className="flex items-center gap-0.5">
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              ⌘
+                            </kbd>
+                            <kbd className="font-sans bg-muted/60 border border-border/60 rounded px-1.5 text-[10px] leading-tight text-muted-foreground/80">
+                              K
+                            </kbd>
+                          </span>
+                          <span>to focus</span>
+                        </div>
+                      </div>
                     </div>
 
                     <Button
