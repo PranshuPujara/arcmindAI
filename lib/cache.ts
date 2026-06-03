@@ -1,9 +1,12 @@
 import { Redis } from "@upstash/redis";
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+const redis =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      })
+    : null;
 
 export function getCacheKey(
   keyword: string,
@@ -18,27 +21,32 @@ export async function withCache<T>(
   ttlSeconds: number,
   fetcher: () => Promise<T>,
 ): Promise<T> {
-  try {
-    const hit = await redis.get<T>(key);
-    if (hit !== null) {
-      return hit;
+  if (redis) {
+    try {
+      const hit = await redis.get<T>(key);
+      if (hit !== null) {
+        return hit;
+      }
+    } catch (err) {
+      console.warn(`Failed to get cache for key=${key}:`, err);
     }
-  } catch (err) {
-    console.warn(`Failed to get cache for key=${key}:`, err);
   }
 
   const value = await fetcher();
 
-  try {
-    await redis.set(key, value, { ex: ttlSeconds });
-  } catch (err) {
-    console.warn(`Failed to set cache for key=${key}:`, err);
+  if (redis) {
+    try {
+      await redis.set(key, value, { ex: ttlSeconds });
+    } catch (err) {
+      console.warn(`Failed to set cache for key=${key}:`, err);
+    }
   }
 
   return value;
 }
 
 export async function invalidateCache(key: string): Promise<void> {
+  if (!redis) return;
   try {
     await redis.del(key);
   } catch (err) {
