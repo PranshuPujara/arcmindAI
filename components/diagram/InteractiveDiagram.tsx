@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import * as d3 from "d3";
 import { useDiagram } from "@/lib/contexts/DiagramContext";
+import { Plus, Minus, Maximize } from "lucide-react";
 
 /**
  * InteractiveDiagram component initializes a D3 workspace that scales to its parent container.
@@ -31,25 +32,142 @@ export default function InteractiveDiagram() {
     return () => resizeObserver.disconnect();
   }, []);
 
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const svgSelectionRef = useRef<d3.Selection<
+    SVGSVGElement,
+    unknown,
+    null,
+    undefined
+  > | null>(null);
+  const gZoomRef = useRef<d3.Selection<
+    SVGGElement,
+    unknown,
+    null,
+    undefined
+  > | null>(null);
+
+  const fitToScreen = useCallback(
+    (opts?: { padding?: number; animate?: boolean }) => {
+      const svgEl = svgRef.current;
+      const gZoom = gZoomRef.current;
+      const svgSel = svgSelectionRef.current;
+
+      if (!svgEl || !gZoom || !svgSel) return;
+
+      const padding = opts?.padding ?? 24;
+
+      // Compute bounds based on current node/link positions.
+      // Prefer the rendered geometry inside gZoom.
+      const bounds = ((): {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } | null => {
+        try {
+          const nodeCircles = gZoom.selectAll("circle").nodes();
+          if (nodeCircles.length === 0) return null;
+
+          const xs: number[] = [];
+          const ys: number[] = [];
+          for (const n of nodeCircles) {
+            const el = n as SVGCircleElement;
+            const cx = Number(el.getAttribute("cx") ?? 0);
+            const cy = Number(el.getAttribute("cy") ?? 0);
+            const r = Number(el.getAttribute("r") ?? 0);
+            xs.push(cx - r);
+            xs.push(cx + r);
+            ys.push(cy - r);
+            ys.push(cy + r);
+          }
+
+          const minX = Math.min(...xs);
+          const maxX = Math.max(...xs);
+          const minY = Math.min(...ys);
+          const maxY = Math.max(...ys);
+
+          return {
+            x: minX,
+            y: minY,
+            width: Math.max(1, maxX - minX),
+            height: Math.max(1, maxY - minY),
+          };
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!bounds) return;
+
+      const viewportWidth = dimensions.width;
+      const viewportHeight = dimensions.height;
+      if (!viewportWidth || !viewportHeight) return;
+
+      const scale = Math.min(
+        (viewportWidth - padding * 2) / bounds.width,
+        (viewportHeight - padding * 2) / bounds.height,
+      );
+
+      const clampedScale = Math.max(0.1, Math.min(5, scale));
+
+      const targetX = bounds.x + bounds.width / 2;
+      const targetY = bounds.y + bounds.height / 2;
+
+      // D3 zoom transform uses: screen = (world * k) + (tx, ty)
+      // We want target center to map to viewport center.
+      const k = clampedScale;
+      const tx = viewportWidth / 2 - targetX * k;
+      const ty = viewportHeight / 2 - targetY * k;
+
+      const t = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+      if (opts?.animate) {
+        svgSel.transition().duration(500).call(zoomRef.current!.transform, t);
+      } else {
+        svgSel.call(zoomRef.current!.transform, t);
+      }
+    },
+    [dimensions],
+  );
+
   // Initialize and update the SVG viewBox and force-directed graph
   useEffect(() => {
     if (!svgRef.current || dimensions.width === 0 || dimensions.height === 0)
       return;
 
-    const svg = d3.select(svgRef.current);
+    const svgSel = d3.select(svgRef.current);
+    svgSelectionRef.current = svgSel;
 
     // Update viewBox dynamically to match dimensions
-    svg.attr("viewBox", `0 0 ${dimensions.width} ${dimensions.height}`);
+    svgSel.attr("viewBox", `0 0 ${dimensions.width} ${dimensions.height}`);
 
-    // Clear previous elements before rendering the force-directed graph
-    svg.selectAll("*").remove();
+    // Clear previous elements before rendering
+    svgSel.selectAll("*").remove();
+
+    // Create zoom viewport group that holds ALL drawable diagram content
+    const gZoom = svgSel.append("g").attr("class", "d3-zoom-viewport");
+    gZoomRef.current = gZoom;
+
+    // Attach d3.zoom to the SVG
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 5])
+      .filter((event) => {
+        // Allow mouse drag + wheel + touch/pinch.
+        // Disallow right-click.
+        return !(event instanceof MouseEvent && event.button === 2);
+      })
+      .on("zoom", (event) => {
+        gZoom.attr("transform", event.transform.toString());
+      });
+
+    zoomRef.current = zoom;
+    svgSel.call(zoom);
 
     // Temporary graph data used to validate the D3 force simulation.
-    // This will be replaced by actual architecture nodes in future diagram-rendering tasks.
-    type DiagramNode = d3.SimulationNodeDatum & {
-      id: string;
-    };
+    type DiagramNode = d3.SimulationNodeDatum & { id: string };
     type DiagramLink = d3.SimulationLinkDatum<DiagramNode>;
+
     const nodes: DiagramNode[] = [
       { id: "Frontend" },
       { id: "CDN" },
@@ -70,15 +188,11 @@ export default function InteractiveDiagram() {
     const links: DiagramLink[] = [
       { source: "Frontend", target: "CDN" },
       { source: "Frontend", target: "Load Balancer" },
-
       { source: "Load Balancer", target: "API Gateway" },
-
       { source: "API Gateway", target: "Auth Service" },
       { source: "API Gateway", target: "Backend" },
-
       { source: "Auth Service", target: "Database" },
       { source: "Auth Service", target: "Monitoring" },
-
       { source: "Backend", target: "Database" },
       { source: "Backend", target: "Cache" },
       { source: "Backend", target: "Queue" },
@@ -96,7 +210,7 @@ export default function InteractiveDiagram() {
       { source: "Notification Service", target: "Monitoring" },
     ];
 
-    const g = svg.append("g");
+    const g = gZoom.append("g").attr("class", "d3-diagram");
 
     const link = g
       .selectAll("line")
@@ -164,29 +278,87 @@ export default function InteractiveDiagram() {
 
     simulation.on("end", () => {
       simulation.stop();
+      // Fit after simulation stabilizes
+      fitToScreen({ padding: 28 });
     });
 
-    // Clean up the simulation on unmount
+    // Fit immediately once nodes exist (positions will update quickly)
+    const raf = window.requestAnimationFrame(() => {
+      fitToScreen({ padding: 28 });
+    });
+
+    // Clean up
     return () => {
+      window.cancelAnimationFrame(raf);
       simulation.stop();
     };
-  }, [dimensions]);
+  }, [dimensions, fitToScreen]);
+
+  const handleZoomIn = () => {
+    const svgSel = svgSelectionRef.current;
+    if (!svgSel || !zoomRef.current) return;
+    svgSel.transition().duration(150).call(zoomRef.current.scaleBy, 1.2);
+  };
+
+  const handleZoomOut = () => {
+    const svgSel = svgSelectionRef.current;
+    if (!svgSel || !zoomRef.current) return;
+    svgSel
+      .transition()
+      .duration(150)
+      .call(zoomRef.current.scaleBy, 1 / 1.2);
+  };
+
+  const handleReset = () => fitToScreen({ padding: 28, animate: true });
 
   if (!isD3Enabled) return null;
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-[500px] min-h-[400px] rounded-2xl border border-border/40 bg-card/30 overflow-hidden backdrop-blur-sm shadow-inner relative flex items-center justify-center transition-all duration-500"
+      className="w-full h-125 min-h-100 rounded-2xl border border-border/40 bg-card/30 overflow-hidden backdrop-blur-sm shadow-inner relative flex items-center justify-center transition-all duration-500"
     >
+      {/* Floating viewport controls */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+        <div className="inline-flex rounded-xl border border-border/40 bg-background/60 backdrop-blur p-1 shadow-sm gap-1">
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all"
+            aria-label="Zoom in"
+            title="Zoom In"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all"
+            aria-label="Zoom out"
+            title="Zoom Out"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all"
+            aria-label="Reset view"
+            title="Reset View (Fit to Screen)"
+          >
+            <Maximize className="w-3.5 h-3.5" />
+            Reset View
+          </button>
+        </div>
+      </div>
       <svg
         ref={svgRef}
-        className="w-full h-full block touch-none"
+        className="w-full h-full block touch-none cursor-grab active:cursor-grabbing"
         preserveAspectRatio="xMidYMid meet"
       />
 
       {/* Dev Mode Badge */}
-      <div className="absolute top-4 right-4 px-2 py-1 bg-primary/10 border border-primary/20 rounded text-[10px] font-mono text-primary uppercase tracking-widest pointer-events-none">
+      <div className="absolute top-4 right-4 translate-x-0 translate-y-12 px-2 py-1 bg-primary/10 border border-primary/20 rounded text-[10px] font-mono text-primary uppercase tracking-widest pointer-events-none">
         D3 Alpha
       </div>
     </div>
