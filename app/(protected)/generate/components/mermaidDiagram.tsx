@@ -44,10 +44,11 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
     const diagram = diagramRef.current;
 
     const containerRect = container.getBoundingClientRect();
-    const diagramRect = diagram.getBoundingClientRect();
+    const diagramWidth = diagram.scrollWidth || diagram.offsetWidth;
+    const diagramHeight = diagram.scrollHeight || diagram.offsetHeight;
 
-    const centerX = (containerRect.width - diagramRect.width) / 2;
-    const centerY = (containerRect.height - diagramRect.height) / 2;
+    const centerX = (containerRect.width - diagramWidth) / 2;
+    const centerY = (containerRect.height - diagramHeight) / 2;
 
     setPosition({ x: centerX, y: centerY });
     setScale(1);
@@ -70,7 +71,14 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
         setTimeout(centerDiagram, 100);
       } catch (err) {
         console.error("Mermaid rendering error:", err);
-        diagramRef.current.innerHTML = `<pre class="p-4 overflow-auto text-destructive bg-destructive/10 rounded">${chart}</pre>`;
+        if (diagramRef.current) {
+          const pre = document.createElement("pre");
+          pre.className =
+            "p-4 overflow-auto text-destructive bg-destructive/10 rounded";
+          pre.textContent = chart;
+          diagramRef.current.innerHTML = "";
+          diagramRef.current.appendChild(pre);
+        }
       }
     };
     render();
@@ -156,9 +164,9 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   const downloadAsImage = async () => {
     if (!diagramRef.current) return;
 
+    const originalStyle = diagramRef.current.style.cssText;
     try {
       // Temporarily reset transform styles to capture clean PNG export
-      const originalStyle = diagramRef.current.style.cssText;
       diagramRef.current.style.transform = "none";
       diagramRef.current.style.transition = "none";
 
@@ -167,15 +175,17 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
         pixelRatio: 2,
       });
 
-      // Restore original transform styles
-      diagramRef.current.style.cssText = originalStyle;
-
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = "architecture-diagram.png";
       link.click();
     } catch (err) {
       console.error("Failed to export diagram:", err);
+    } finally {
+      // Restore original transform styles
+      if (diagramRef.current) {
+        diagramRef.current.style.cssText = originalStyle;
+      }
     }
   };
 
@@ -196,6 +206,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
               className="h-8 w-8 rounded-none border-r"
               onClick={zoomOut}
               title="Zoom Out"
+              aria-label="Zoom Out"
             >
               <Minus className="w-4 h-4" />
             </Button>
@@ -205,6 +216,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
               className="h-8 w-8 rounded-none border-r"
               onClick={zoomIn}
               title="Zoom In"
+              aria-label="Zoom In"
             >
               <Plus className="w-4 h-4" />
             </Button>
@@ -214,6 +226,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
               className="h-8 w-8 rounded-none"
               onClick={resetView}
               title="Reset View"
+              aria-label="Reset View"
             >
               <RotateCcw className="w-4 h-4" />
             </Button>

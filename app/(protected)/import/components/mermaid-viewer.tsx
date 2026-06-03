@@ -7,6 +7,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, RotateCcw, Maximize2, Minimize2 } from "lucide-react";
 
+// Initialize Mermaid once when the module loads
+try {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "default",
+    securityLevel: "loose",
+    fontFamily: "inherit",
+  });
+} catch (e) {
+  console.error("Failed to initialize mermaid", e);
+}
+
+const escapeHtml = (unsafe: string) => {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
 interface MermaidViewerProps {
   diagram: string;
   title?: string;
@@ -31,24 +52,18 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
     const diagramEl = diagramRef.current;
 
     const containerRect = container.getBoundingClientRect();
-    const diagramRect = diagramEl.getBoundingClientRect();
+    const diagramWidth = diagramEl.scrollWidth || diagramEl.offsetWidth;
+    const diagramHeight = diagramEl.scrollHeight || diagramEl.offsetHeight;
 
-    const centerX = (containerRect.width - diagramRect.width) / 2;
-    const centerY = (containerRect.height - diagramRect.height) / 2;
+    const centerX = (containerRect.width - diagramWidth) / 2;
+    const centerY = (containerRect.height - diagramHeight) / 2;
 
     setPosition({ x: centerX, y: centerY });
     setScale(1);
   }, []);
 
-  // Initialize and Render diagram
+  // Render diagram when input changes
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-      securityLevel: "loose",
-      fontFamily: "inherit",
-    });
-
     const renderDiagram = async () => {
       if (!diagramRef.current || !diagram) return;
       diagramRef.current.innerHTML = "";
@@ -67,7 +82,7 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
           diagramRef.current.innerHTML = `
             <div class="text-destructive p-4 border border-destructive rounded bg-destructive/5">
               <p class="font-semibold text-sm">Failed to render diagram</p>
-              <p class="text-xs mt-1">Error: ${error.message}</p>
+              <p class="text-xs mt-1">Error: ${escapeHtml(error.message)}</p>
             </div>
           `;
         }
@@ -170,6 +185,7 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
               className="h-8 w-8 rounded-none border-r"
               onClick={zoomOut}
               title="Zoom Out"
+              aria-label="Zoom Out"
             >
               <Minus className="w-4 h-4" />
             </Button>
@@ -179,6 +195,7 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
               className="h-8 w-8 rounded-none border-r"
               onClick={zoomIn}
               title="Zoom In"
+              aria-label="Zoom In"
             >
               <Plus className="w-4 h-4" />
             </Button>
@@ -188,6 +205,7 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
               className="h-8 w-8 rounded-none"
               onClick={resetView}
               title="Reset View"
+              aria-label="Reset View"
             >
               <RotateCcw className="w-4 h-4" />
             </Button>

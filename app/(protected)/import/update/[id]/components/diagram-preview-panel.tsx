@@ -33,10 +33,11 @@ export function DiagramPreviewPanel({
     const diagram = diagramRef.current;
 
     const containerRect = container.getBoundingClientRect();
-    const diagramRect = diagram.getBoundingClientRect();
+    const diagramWidth = diagram.scrollWidth || diagram.offsetWidth;
+    const diagramHeight = diagram.scrollHeight || diagram.offsetHeight;
 
-    const centerX = (containerRect.width - diagramRect.width) / 2;
-    const centerY = (containerRect.height - diagramRect.height) / 2;
+    const centerX = (containerRect.width - diagramWidth) / 2;
+    const centerY = (containerRect.height - diagramHeight) / 2;
 
     setPosition({ x: centerX, y: centerY });
     setScale(1);
