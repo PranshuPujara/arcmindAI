@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import * as d3 from "d3";
 import { useDiagram } from "@/lib/contexts/DiagramContext";
+import { Plus, Minus, Maximize } from "lucide-react";
 
 /**
  * InteractiveDiagram component initializes a D3 workspace that scales to its parent container.
@@ -45,82 +46,89 @@ export default function InteractiveDiagram() {
     undefined
   > | null>(null);
 
-  const fitToScreen = (opts?: { padding?: number }) => {
-    const svgEl = svgRef.current;
-    const gZoom = gZoomRef.current;
-    const svgSel = svgSelectionRef.current;
+  const fitToScreen = useCallback(
+    (opts?: { padding?: number; animate?: boolean }) => {
+      const svgEl = svgRef.current;
+      const gZoom = gZoomRef.current;
+      const svgSel = svgSelectionRef.current;
 
-    if (!svgEl || !gZoom || !svgSel) return;
+      if (!svgEl || !gZoom || !svgSel) return;
 
-    const padding = opts?.padding ?? 24;
+      const padding = opts?.padding ?? 24;
 
-    // Compute bounds based on current node/link positions.
-    // Prefer the rendered geometry inside gZoom.
-    const bounds = ((): {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    } | null => {
-      try {
-        const nodeCircles = gZoom.selectAll("circle").nodes();
-        if (nodeCircles.length === 0) return null;
+      // Compute bounds based on current node/link positions.
+      // Prefer the rendered geometry inside gZoom.
+      const bounds = ((): {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } | null => {
+        try {
+          const nodeCircles = gZoom.selectAll("circle").nodes();
+          if (nodeCircles.length === 0) return null;
 
-        const xs: number[] = [];
-        const ys: number[] = [];
-        for (const n of nodeCircles) {
-          const el = n as SVGCircleElement;
-          const cx = Number(el.getAttribute("cx") ?? 0);
-          const cy = Number(el.getAttribute("cy") ?? 0);
-          const r = Number(el.getAttribute("r") ?? 0);
-          xs.push(cx - r);
-          xs.push(cx + r);
-          ys.push(cy - r);
-          ys.push(cy + r);
+          const xs: number[] = [];
+          const ys: number[] = [];
+          for (const n of nodeCircles) {
+            const el = n as SVGCircleElement;
+            const cx = Number(el.getAttribute("cx") ?? 0);
+            const cy = Number(el.getAttribute("cy") ?? 0);
+            const r = Number(el.getAttribute("r") ?? 0);
+            xs.push(cx - r);
+            xs.push(cx + r);
+            ys.push(cy - r);
+            ys.push(cy + r);
+          }
+
+          const minX = Math.min(...xs);
+          const maxX = Math.max(...xs);
+          const minY = Math.min(...ys);
+          const maxY = Math.max(...ys);
+
+          return {
+            x: minX,
+            y: minY,
+            width: Math.max(1, maxX - minX),
+            height: Math.max(1, maxY - minY),
+          };
+        } catch {
+          return null;
         }
+      })();
 
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
+      if (!bounds) return;
 
-        return {
-          x: minX,
-          y: minY,
-          width: Math.max(1, maxX - minX),
-          height: Math.max(1, maxY - minY),
-        };
-      } catch {
-        return null;
+      const viewportWidth = dimensions.width;
+      const viewportHeight = dimensions.height;
+      if (!viewportWidth || !viewportHeight) return;
+
+      const scale = Math.min(
+        (viewportWidth - padding * 2) / bounds.width,
+        (viewportHeight - padding * 2) / bounds.height,
+      );
+
+      const clampedScale = Math.max(0.1, Math.min(5, scale));
+
+      const targetX = bounds.x + bounds.width / 2;
+      const targetY = bounds.y + bounds.height / 2;
+
+      // D3 zoom transform uses: screen = (world * k) + (tx, ty)
+      // We want target center to map to viewport center.
+      const k = clampedScale;
+      const tx = viewportWidth / 2 - targetX * k;
+      const ty = viewportHeight / 2 - targetY * k;
+
+      const t = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+      if (opts?.animate) {
+        svgSel.transition().duration(500).call(zoomRef.current!.transform, t);
+      } else {
+        svgSel.call(zoomRef.current!.transform, t);
       }
-    })();
-
-    if (!bounds) return;
-
-    const viewportWidth = dimensions.width;
-    const viewportHeight = dimensions.height;
-    if (!viewportWidth || !viewportHeight) return;
-
-    const scale = Math.min(
-      (viewportWidth - padding * 2) / bounds.width,
-      (viewportHeight - padding * 2) / bounds.height,
-    );
-
-    const clampedScale = Math.max(0.1, Math.min(5, scale));
-
-    const targetX = bounds.x + bounds.width / 2;
-    const targetY = bounds.y + bounds.height / 2;
-
-    // D3 zoom transform uses: screen = (world * k) + (tx, ty)
-    // We want target center to map to viewport center.
-    const k = clampedScale;
-    const tx = viewportWidth / 2 - targetX * k;
-    const ty = viewportHeight / 2 - targetY * k;
-
-    const t = d3.zoomIdentity.translate(tx, ty).scale(k);
-
-    svgSel.call(zoomRef.current!, t);
-  };
+    },
+    [dimensions],
+  );
 
   // Initialize and update the SVG viewBox and force-directed graph
   useEffect(() => {
@@ -147,7 +155,7 @@ export default function InteractiveDiagram() {
       .filter((event) => {
         // Allow mouse drag + wheel + touch/pinch.
         // Disallow right-click.
-        return !("button" in (event as any) && (event as any).button === 2);
+        return !(event instanceof MouseEvent && event.button === 2);
       })
       .on("zoom", (event) => {
         gZoom.attr("transform", event.transform.toString());
@@ -284,7 +292,7 @@ export default function InteractiveDiagram() {
       window.cancelAnimationFrame(raf);
       simulation.stop();
     };
-  }, [dimensions]);
+  }, [dimensions, fitToScreen]);
 
   const handleZoomIn = () => {
     const svgSel = svgSelectionRef.current;
@@ -301,7 +309,7 @@ export default function InteractiveDiagram() {
       .call(zoomRef.current.scaleBy, 1 / 1.2);
   };
 
-  const handleReset = () => fitToScreen({ padding: 28 });
+  const handleReset = () => fitToScreen({ padding: 28, animate: true });
 
   if (!isD3Enabled) return null;
 
@@ -312,39 +320,40 @@ export default function InteractiveDiagram() {
     >
       {/* Floating viewport controls */}
       <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
-        <div className="inline-flex rounded-xl border border-border/40 bg-background/60 backdrop-blur px-1 py-1 shadow-sm">
+        <div className="inline-flex rounded-xl border border-border/40 bg-background/60 backdrop-blur p-1 shadow-sm gap-1">
           <button
             type="button"
             onClick={handleZoomIn}
-            className="px-2 py-1 text-xs rounded-lg hover:bg-white/5 active:bg-white/10 transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all"
             aria-label="Zoom in"
             title="Zoom In"
           >
-            Zoom In
+            <Plus className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={handleZoomOut}
-            className="px-2 py-1 text-xs rounded-lg hover:bg-white/5 active:bg-white/10 transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all"
             aria-label="Zoom out"
             title="Zoom Out"
           >
-            Zoom Out
+            <Minus className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={handleReset}
-            className="px-2 py-1 text-xs rounded-lg hover:bg-white/5 active:bg-white/10 transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent active:scale-95 transition-all"
             aria-label="Reset view"
             title="Reset View (Fit to Screen)"
           >
+            <Maximize className="w-3.5 h-3.5" />
             Reset View
           </button>
         </div>
       </div>
       <svg
         ref={svgRef}
-        className="w-full h-full block touch-none"
+        className="w-full h-full block touch-none cursor-grab active:cursor-grabbing"
         preserveAspectRatio="xMidYMid meet"
       />
 
