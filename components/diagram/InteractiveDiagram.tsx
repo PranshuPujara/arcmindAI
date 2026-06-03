@@ -192,10 +192,12 @@ export default function InteractiveDiagram() {
       { source: "Backend", target: "Notification Service" },
       { source: "Backend", target: "Third-Party API" },
       { source: "Backend", target: "Monitoring" },
+
       { source: "Worker", target: "Queue" },
       { source: "Worker", target: "Database" },
       { source: "Worker", target: "Object Storage" },
       { source: "Worker", target: "Monitoring" },
+
       { source: "Notification Service", target: "Third-Party API" },
       { source: "Notification Service", target: "Monitoring" },
     ];

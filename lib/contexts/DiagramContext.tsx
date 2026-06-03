@@ -35,7 +35,7 @@ export function DiagramProvider({ children }: { children: ReactNode }) {
 
   const [activeLayers, setActiveLayers] = useState<DiagramLayer[]>([]);
 
-  const [isD3Enabled, setIsD3Enabled] = useState(true);
+  const [isD3Enabled, setIsD3Enabled] = useState(false);
 
   return (
     <DiagramContext.Provider
