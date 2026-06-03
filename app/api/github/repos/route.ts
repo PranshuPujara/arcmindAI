@@ -1,6 +1,6 @@
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getCacheKey, withCache } from "@/lib/cache";
-import { decryptToken } from "@/lib/encryption";
+import { decryptToken } from "@/lib/crypto/encryption";
 import { db } from "@/lib/prisma";
 import axios from "axios";
 import { getServerSession } from "next-auth";
