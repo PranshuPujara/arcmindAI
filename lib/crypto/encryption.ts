@@ -1,11 +1,38 @@
 import crypto from "crypto";
 
+// Encryption algorithm
 const ALGORITHM = "aes-256-gcm";
-const IV_LENGTH = 16;
+const IV_LENGTH = 16; // For AES, this is always 16
 const SALT_LENGTH = 64;
 const KEY_LENGTH = 32;
+const PBKDF2_ITERATIONS = 100000;
 
 export type APIKeyProvider = "gemini" | "openai";
+
+/**
+ * Get encryption key from environment variable
+ * If not set, throw error
+ */
+function getEncryptionKey(): Buffer {
+  const key = process.env.ENCRYPTION_KEY;
+
+  if (!key) {
+    throw new Error(
+      "ENCRYPTION_KEY environment variable is not set. Please generate a 32-byte key using: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    );
+  }
+
+  // Convert hex string to buffer
+  const keyBuffer = Buffer.from(key, "hex");
+
+  if (keyBuffer.length !== KEY_LENGTH) {
+    throw new Error(
+      `ENCRYPTION_KEY must be ${KEY_LENGTH} bytes (64 hex characters). Current length: ${keyBuffer.length} bytes`,
+    );
+  }
+
+  return keyBuffer;
+}
 
 /**
  * Generates a random encryption key for a user
@@ -13,6 +40,114 @@ export type APIKeyProvider = "gemini" | "openai";
  */
 export function generateEncryptionKey(): string {
   return crypto.randomBytes(KEY_LENGTH).toString("hex");
+}
+
+/**
+ * Encrypt a token using AES-256-GCM
+ * @param token - Plain text token to encrypt
+ * @returns Encrypted token as string (format: v2:iv:encrypted:authTag:salt)
+ */
+export function encryptToken(token: string): string {
+  try {
+    const encryptionKey = getEncryptionKey();
+
+    // Generate random IV and salt
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const salt = crypto.randomBytes(SALT_LENGTH);
+
+    // Derive key from encryption key and salt
+    const key = crypto.pbkdf2Sync(
+      encryptionKey,
+      salt,
+      PBKDF2_ITERATIONS,
+      KEY_LENGTH,
+      "sha512",
+    );
+
+    // Create cipher
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+
+    // Encrypt the token
+    let encrypted = cipher.update(token, "utf8", "hex");
+    encrypted += cipher.final("hex");
+
+    // Get authentication tag
+    const authTag = cipher.getAuthTag();
+
+    // Return format: v2:iv:encrypted:authTag:salt
+    return `v2:${iv.toString("hex")}:${encrypted}:${authTag.toString("hex")}:${salt.toString("hex")}`;
+  } catch (error) {
+    console.error("Error encrypting token:", error);
+    throw new Error("Failed to encrypt token");
+  }
+}
+
+/**
+ * Decrypt a token using AES-256-GCM
+ * Supports both the new v2 format and legacy (iv:encrypted:authTag) format.
+ * @param encryptedToken - Encrypted token string
+ * @returns Decrypted plain text token
+ */
+export function decryptToken(encryptedToken: string): string {
+  try {
+    const encryptionKey = getEncryptionKey();
+
+    // Split the encrypted token into its components
+    const parts = encryptedToken.split(":");
+
+    if (parts.length === 5 && parts[0] === "v2") {
+      // New format: v2:iv:encrypted:authTag:salt
+      const [, ivHex, encrypted, authTagHex, saltHex] = parts;
+
+      // Convert from hex
+      const iv = Buffer.from(ivHex, "hex");
+      const authTag = Buffer.from(authTagHex, "hex");
+      const salt = Buffer.from(saltHex, "hex");
+
+      // Derive key from encryption key and salt
+      const key = crypto.pbkdf2Sync(
+        encryptionKey,
+        salt,
+        PBKDF2_ITERATIONS,
+        KEY_LENGTH,
+        "sha512",
+      );
+
+      // Create decipher
+      const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+      decipher.setAuthTag(authTag);
+
+      // Decrypt the token
+      let decrypted = decipher.update(encrypted, "hex", "utf8");
+      decrypted += decipher.final("utf8");
+
+      return decrypted;
+    }
+
+    if (parts.length === 3) {
+      // Legacy format: iv:encrypted:authTag (raw key, no PBKDF2)
+      const [ivHex, encrypted, authTagHex] = parts;
+
+      // Convert from hex
+      const iv = Buffer.from(ivHex, "hex");
+      const authTag = Buffer.from(authTagHex, "hex");
+
+      // Create decipher
+      const decipher = crypto.createDecipheriv(ALGORITHM, encryptionKey, iv);
+      decipher.setAuthTag(authTag);
+
+      // Decrypt the token
+      let decrypted = decipher.update(encrypted, "hex", "utf8");
+      decrypted += decipher.final("utf8");
+
+      return decrypted;
+    }
+
+    throw new Error("Invalid encrypted token format");
+  } catch (error) {
+    console.error("Error decrypting token:", error);
+    throw new Error("Failed to decrypt token");
+  }
 }
 
 /**
@@ -31,7 +166,7 @@ export function encryptApiKey(apiKey: string, encryptionKey: string): string {
     const key = crypto.pbkdf2Sync(
       Buffer.from(encryptionKey, "hex"),
       salt,
-      100000,
+      PBKDF2_ITERATIONS,
       KEY_LENGTH,
       "sha512",
     );
@@ -82,7 +217,7 @@ export function decryptApiKey(
     const key = crypto.pbkdf2Sync(
       Buffer.from(encryptionKey, "hex"),
       salt,
-      100000,
+      PBKDF2_ITERATIONS,
       KEY_LENGTH,
       "sha512",
     );

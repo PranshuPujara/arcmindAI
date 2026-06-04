@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import { db } from "@/lib/prisma";
 import { generateAccessToken } from "@/lib/jwt";
 import { loginRateLimitIP, loginRateLimitAccount } from "@/lib/rateLimit";
-import { encryptToken } from "@/lib/encryption";
+import { encryptToken } from "@/lib/crypto/encryption";
 import {
   httpRequestsTotal,
   httpRequestDurationSeconds,
