@@ -178,17 +178,31 @@ export function GenerationHistoryCard({
                       </span>
                     </TableCell>
                     <TableCell onClick={(event) => event.stopPropagation()}>
-                      <div className="flex flex-col gap-1">
-                        <StarRating
-                          rating={getRating(gen)}
-                          onRate={(value) => handleRateHistoryItem(gen, value)}
-                          disabled={savingRatingId === gen.id}
-                          size={16}
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {getRating(gen)
-                            ? `${getRating(gen)}/5`
-                            : "Not rated"}
+                      <div className="flex flex-row items-center gap-2 group">
+                        <div
+                          className={`transition-opacity duration-200 ${
+                            getRating(gen) > 0
+                              ? "opacity-100"
+                              : "opacity-40 group-hover:opacity-100"
+                          }`}
+                        >
+                          <StarRating
+                            rating={getRating(gen)}
+                            onRate={(value) =>
+                              handleRateHistoryItem(gen, value)
+                            }
+                            disabled={savingRatingId === gen.id}
+                            size={14}
+                          />
+                        </div>
+                        <span
+                          className={`text-[11px] font-medium transition-opacity duration-200 ${
+                            getRating(gen) > 0
+                              ? "text-muted-foreground"
+                              : "text-muted-foreground/50 opacity-0 group-hover:opacity-100"
+                          }`}
+                        >
+                          {getRating(gen) > 0 ? `${getRating(gen)}/5` : "Rate"}
                         </span>
                       </div>
                     </TableCell>
