@@ -16,6 +16,7 @@ interface Generation {
   userInput: string;
   createdAt: Date;
   systemName: string;
+  rating?: number | null;
 }
 
 interface HistoryContextType {

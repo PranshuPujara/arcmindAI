@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText } from "lucide-react";
+import StarRating from "@/components/ui/star-rating";
 import {
   Table,
   TableBody,
@@ -26,6 +27,7 @@ interface Generation {
   systemName?: string;
   userInput: string;
   createdAt: Date;
+  rating?: number | null;
 }
 
 interface GenerationHistoryCardProps {
@@ -39,6 +41,10 @@ export function GenerationHistoryCard({
 }: GenerationHistoryCardProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const [ratingOverrides, setRatingOverrides] = useState<
+    Record<string, number | null>
+  >({});
+  const [savingRatingId, setSavingRatingId] = useState<string | null>(null);
 
   // Filter history based on search term (case-insensitive)
   const filteredHistory = useMemo(() => {
@@ -53,6 +59,46 @@ export function GenerationHistoryCard({
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
   }, [history, searchTerm]);
+
+  const getRating = (generation: Generation) =>
+    ratingOverrides[generation.id] ?? generation.rating ?? 0;
+
+  const handleRateHistoryItem = async (
+    generation: Generation,
+    rating: number,
+  ) => {
+    if (savingRatingId === generation.id) return;
+
+    const previousRating = getRating(generation);
+
+    try {
+      setSavingRatingId(generation.id);
+      setRatingOverrides((current) => ({
+        ...current,
+        [generation.id]: rating,
+      }));
+
+      const response = await fetch(`/api/generate/${generation.id}/rate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rating }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save rating");
+      }
+    } catch (error) {
+      console.error("Failed to save history rating:", error);
+      setRatingOverrides((current) => ({
+        ...current,
+        [generation.id]: previousRating,
+      }));
+    } finally {
+      setSavingRatingId(null);
+    }
+  };
 
   return (
     <Card>
@@ -76,20 +122,22 @@ export function GenerationHistoryCard({
       <CardContent>
         {isLoading ? (
           <div className="rounded-md border">
-            <div className="grid grid-cols-4 gap-4 border-b p-4">
+            <div className="grid grid-cols-5 gap-4 border-b p-4">
               <Skeleton className="h-4 w-16" />
               <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-16" />
               <Skeleton className="h-4 w-16" />
               <Skeleton className="h-4 w-16" />
             </div>
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="grid grid-cols-4 gap-4 border-b p-4 last:border-b-0"
+                className="grid grid-cols-5 gap-4 border-b p-4 last:border-b-0"
               >
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-16" />
                 <Skeleton className="h-4 w-16" />
               </div>
             ))}
@@ -102,6 +150,7 @@ export function GenerationHistoryCard({
                   <TableHead>Date</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Input</TableHead>
+                  <TableHead>Rating</TableHead>
                   <TableHead>Time</TableHead>
                 </TableRow>
               </TableHeader>
@@ -127,6 +176,35 @@ export function GenerationHistoryCard({
                         {gen.userInput.substring(0, 50)}
                         {gen.userInput.length > 50 ? "..." : ""}
                       </span>
+                    </TableCell>
+                    <TableCell onClick={(event) => event.stopPropagation()}>
+                      <div className="flex flex-row items-center gap-2 group">
+                        <div
+                          className={`transition-opacity duration-200 ${
+                            getRating(gen) > 0
+                              ? "opacity-100"
+                              : "opacity-40 group-hover:opacity-100"
+                          }`}
+                        >
+                          <StarRating
+                            rating={getRating(gen)}
+                            onRate={(value) =>
+                              handleRateHistoryItem(gen, value)
+                            }
+                            disabled={savingRatingId === gen.id}
+                            size={14}
+                          />
+                        </div>
+                        <span
+                          className={`text-[11px] font-medium transition-opacity duration-200 ${
+                            getRating(gen) > 0
+                              ? "text-muted-foreground"
+                              : "text-muted-foreground/50 opacity-0 group-hover:opacity-100"
+                          }`}
+                        >
+                          {getRating(gen) > 0 ? `${getRating(gen)}/5` : "Rate"}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {new Date(gen.createdAt).toLocaleTimeString([], {
