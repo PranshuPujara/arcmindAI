@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { generateOTP } from "@/lib/otpgenerator";
 import { sendMail } from "@/lib/mailer";
 import { signUpSchema } from "@/lib/validation/signUpschema";
+import { signupRateLimitIP } from "@/lib/rateLimit";
 import { otpEmailTemplate } from "@/components/email-template/otpEmailTemplate";
 import {
   httpRequestsTotal,
@@ -21,6 +22,24 @@ export async function POST(req: NextRequest) {
   httpRequestsTotal.inc({ route, method });
 
   try {
+    const ip =
+      req.headers.get("x-forwarded-for") ||
+      req.headers.get("x-real-ip") ||
+      "unknown";
+
+    const ipLimit = await signupRateLimitIP.limit(ip);
+    if (!ipLimit.success) {
+      apiGatewayErrorsTotal.inc({ status_code: "429" });
+      httpRequestDurationSeconds.observe(
+        { route },
+        (Date.now() - startTime) / 1000,
+      );
+      return NextResponse.json(
+        { message: "Too many signup attempts. Please try again later." },
+        { status: 429 },
+      );
+    }
+
     const body = await req.json();
     const parsedData = signUpSchema.safeParse(body);
 
