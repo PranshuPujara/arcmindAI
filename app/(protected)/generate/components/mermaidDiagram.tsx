@@ -13,6 +13,7 @@ import {
   Minimize2,
 } from "lucide-react";
 import * as htmlToImage from "html-to-image";
+import { createPortal } from "react-dom";
 
 interface MermaidDiagramProps {
   chart: string;
@@ -189,9 +190,13 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
     }
   };
 
-  return (
+  const diagramElement = (
     <div
-      className={`flex flex-col gap-4 w-full ${isFullscreen ? "fixed inset-0 z-50 bg-background/95 p-6 backdrop-blur" : ""}`}
+      className={`flex flex-col gap-4 w-full ${
+        isFullscreen
+          ? "fixed inset-0 z-50 bg-background/95 p-4 md:p-6 backdrop-blur w-screen h-screen overflow-hidden"
+          : ""
+      }`}
     >
       <div className="flex items-center justify-between flex-wrap gap-2">
         {isFullscreen && (
@@ -266,7 +271,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
         onTouchEnd={handleTouchEnd}
         onDoubleClick={resetView}
         className={`relative w-full overflow-hidden bg-card/50 rounded-xl border border-border/40 select-none ${
-          isFullscreen ? "flex-1 min-h-[70vh]" : "h-[450px] sm:h-[550px]"
+          isFullscreen ? "flex-1 h-full" : "h-[450px] sm:h-[550px]"
         } ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
         style={{ touchAction: "none" }}
       >
@@ -287,6 +292,12 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
       </div>
     </div>
   );
+
+  if (isFullscreen && typeof window !== "undefined") {
+    return createPortal(diagramElement, document.body);
+  }
+
+  return diagramElement;
 };
 
 export default MermaidDiagram;

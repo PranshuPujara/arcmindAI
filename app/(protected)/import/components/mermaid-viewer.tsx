@@ -6,6 +6,7 @@ import mermaid from "mermaid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, RotateCcw, Maximize2, Minimize2 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 // Initialize Mermaid once when the module loads
 try {
@@ -170,9 +171,13 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
 
   const activeTitle = title || "System Architecture Diagram";
 
-  return (
+  const cardElement = (
     <Card
-      className={`w-full flex flex-col ${isFullscreen ? "fixed inset-0 z-50 bg-background p-6" : "h-[500px]"}`}
+      className={`w-full flex flex-col ${
+        isFullscreen
+          ? "fixed inset-0 z-50 bg-background p-4 md:p-6 w-screen h-screen overflow-hidden"
+          : "h-[500px]"
+      }`}
     >
       <CardHeader className="pb-3 flex-shrink-0 flex flex-row items-center justify-between flex-wrap gap-2">
         <CardTitle className="text-lg font-semibold">{activeTitle}</CardTitle>
@@ -260,4 +265,10 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
       </CardContent>
     </Card>
   );
+
+  if (isFullscreen && typeof window !== "undefined") {
+    return createPortal(cardElement, document.body);
+  }
+
+  return cardElement;
 }
