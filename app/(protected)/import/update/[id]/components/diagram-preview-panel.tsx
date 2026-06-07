@@ -22,6 +22,8 @@ export function DiagramPreviewPanel({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const pinchStartRef = useRef(0);
+  const scaleStartRef = useRef(1);
 
   // Center diagram on load or update
   const centerDiagram = useCallback(() => {
@@ -31,10 +33,11 @@ export function DiagramPreviewPanel({
     const diagram = diagramRef.current;
 
     const containerRect = container.getBoundingClientRect();
-    const diagramRect = diagram.getBoundingClientRect();
+    const diagramWidth = diagram.scrollWidth || diagram.offsetWidth;
+    const diagramHeight = diagram.scrollHeight || diagram.offsetHeight;
 
-    const centerX = (containerRect.width - diagramRect.width) / 2;
-    const centerY = (containerRect.height - diagramRect.height) / 2;
+    const centerX = (containerRect.width - diagramWidth) / 2;
+    const centerY = (containerRect.height - diagramHeight) / 2;
 
     setPosition({ x: centerX, y: centerY });
     setScale(1);
@@ -82,6 +85,51 @@ export function DiagramPreviewPanel({
 
   const handleMouseUp = () => setIsDragging(false);
 
+  // 📱 Touch drag and pinch-to-zoom
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.touches[0].clientX - position.x,
+        y: e.touches[0].clientY - position.y,
+      };
+    } else if (e.touches.length === 2) {
+      setIsDragging(false);
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const distance = Math.hypot(
+        t2.clientX - t1.clientX,
+        t2.clientY - t1.clientY,
+      );
+      pinchStartRef.current = distance;
+      scaleStartRef.current = scale;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isDragging && e.touches.length === 1) {
+      setPosition({
+        x: e.touches[0].clientX - dragStartRef.current.x,
+        y: e.touches[0].clientY - dragStartRef.current.y,
+      });
+    } else if (e.touches.length === 2 && pinchStartRef.current > 0) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const distance = Math.hypot(
+        t2.clientX - t1.clientX,
+        t2.clientY - t1.clientY,
+      );
+      const newScale =
+        (distance / pinchStartRef.current) * scaleStartRef.current;
+      setScale(Math.max(0.5, Math.min(newScale, 6)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    pinchStartRef.current = 0;
+  };
+
   return (
     <Card className="h-full border-0 rounded-none flex flex-col">
       <CardHeader className="pb-3 flex-shrink-0 flex flex-row items-center justify-between">
@@ -115,6 +163,9 @@ export function DiagramPreviewPanel({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           className={`w-full h-full overflow-hidden bg-background p-2 rounded-lg border ${
             isDragging ? "cursor-grabbing" : "cursor-grab"
           }`}
