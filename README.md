@@ -15,6 +15,23 @@ Generate structured system designs using AI. Describe your requirements and get 
 >
 > Please also read the contribution guidelines before submitting changes.
 
+---
+
+## Table of Contents
+
+- [ArcMind AI - AI-Powered System Design Generator](#arcmind-ai---ai-powered-system-design-generator)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Docker Setup](#docker-setup)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Security Features](#security-features)
+- [Scripts](#scripts)
+- [Development Workflow](#development-workflow)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - **AI-Powered Generation**: Leverage Google Gemini and LangChain to create comprehensive system designs from natural language descriptions
