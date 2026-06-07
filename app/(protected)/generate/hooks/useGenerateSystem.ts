@@ -59,7 +59,9 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
         }
 
         throw new Error(
-          errorBody.error || `HTTP error! status: ${response.status}`,
+          errorBody.error ||
+            errorBody.message ||
+            `HTTP error! status: ${response.status}`,
         );
       }
 
@@ -162,16 +164,15 @@ export function useGenerateSystem(refetchHistory?: () => Promise<void>) {
 
       return data;
     } catch (err) {
+      let errorMessage = "An error occurred";
       if (err instanceof Error && err.name === "AbortError") {
-        setError(
-          "Request timed out. Please check your connection and try again.",
-        );
-      } else {
-        const errorMessage =
-          err instanceof Error ? err.message : "An error occurred";
-        setError(errorMessage);
+        errorMessage =
+          "Request timed out. Please check your connection and try again.";
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
       }
-      return null;
+      setError(errorMessage);
+      throw err;
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);

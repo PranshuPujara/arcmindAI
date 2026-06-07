@@ -11,6 +11,7 @@ import { useForm } from "react-hook-form";
 import { ArchitectureData } from "../utils/types";
 import { useGenerateSystem } from "../hooks/useGenerateSystem";
 import StarRating from "@/components/ui/star-rating";
+import { toast } from "sonner";
 
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -344,12 +345,21 @@ export default function GeneratePage() {
             );
           }
         }
-      } else {
-        setGeneratedData(null);
       }
     } catch (error) {
       console.error("Generation failed:", error);
       setGeneratedData(null);
+
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.includes("Email is not verified")) {
+        toast.error(
+          "Email not verified. Please verify your email before generating architectures.",
+        );
+      } else {
+        toast.error(errorMessage);
+      }
     }
   };
 
