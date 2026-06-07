@@ -45,6 +45,7 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [svgContent, setSvgContent] = useState<string>("");
 
   // Center diagram function
   const centerDiagram = useCallback(() => {
@@ -66,27 +67,25 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
   // Render diagram when input changes
   useEffect(() => {
     const renderDiagram = async () => {
-      if (!diagramRef.current || !diagram) return;
-      diagramRef.current.innerHTML = "";
+      if (!diagram) {
+        setSvgContent("");
+        return;
+      }
       const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
 
       try {
         const { svg } = await mermaid.render(id, diagram);
-        if (diagramRef.current) {
-          diagramRef.current.innerHTML = svg;
-          setTimeout(centerDiagram, 100);
-        }
+        setSvgContent(svg);
+        setTimeout(centerDiagram, 100);
       } catch (err: unknown) {
         const error = err instanceof Error ? err : new Error(String(err));
         console.error("Mermaid rendering error:", error);
-        if (diagramRef.current) {
-          diagramRef.current.innerHTML = `
-            <div class="text-destructive p-4 border border-destructive rounded bg-destructive/5">
-              <p class="font-semibold text-sm">Failed to render diagram</p>
-              <p class="text-xs mt-1">Error: ${escapeHtml(error.message)}</p>
-            </div>
-          `;
-        }
+        setSvgContent(`
+          <div class="text-destructive p-4 border border-destructive rounded bg-destructive/5">
+            <p class="font-semibold text-sm">Failed to render diagram</p>
+            <p class="text-xs mt-1">Error: ${escapeHtml(error.message)}</p>
+          </div>
+        `);
       }
     };
 
@@ -181,7 +180,7 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
     >
       <CardHeader className="pb-3 flex-shrink-0 flex flex-row items-center justify-between flex-wrap gap-2">
         <CardTitle className="text-lg font-semibold">{activeTitle}</CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {/* Zoom Controls */}
           <div className="flex border rounded-lg overflow-hidden bg-card text-card-foreground">
             <Button
@@ -260,6 +259,9 @@ export function MermaidViewer({ diagram, title }: MermaidViewerProps) {
               transition: isDragging ? "none" : "transform 0.15s ease-out",
             }}
             className="inline-block p-4"
+            dangerouslySetInnerHTML={
+              svgContent ? { __html: svgContent } : undefined
+            }
           />
         </div>
       </CardContent>

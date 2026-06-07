@@ -37,6 +37,16 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [svgContent, setSvgContent] = useState<string>("");
+
+  const escapeHtml = (unsafe: string) => {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
 
   // Center diagram dynamically
   const centerDiagram = useCallback(() => {
@@ -58,28 +68,21 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   // Handle Mermaid rendering
   useEffect(() => {
     const render = async () => {
-      if (!diagramRef.current) return;
       if (!chart || chart.trim().length === 0) {
-        diagramRef.current.innerHTML = "";
+        setSvgContent("");
         return;
       }
       try {
         const id = `mermaid-diagram-${Math.random().toString(36).slice(2)}`;
         const { svg } = await mermaid.render(id, chart);
-        diagramRef.current.innerHTML = svg;
+        setSvgContent(svg);
 
         // Wait a tick for SVG layout inside browser, then center
         setTimeout(centerDiagram, 100);
       } catch (err) {
         console.error("Mermaid rendering error:", err);
-        if (diagramRef.current) {
-          const pre = document.createElement("pre");
-          pre.className =
-            "p-4 overflow-auto text-destructive bg-destructive/10 rounded";
-          pre.textContent = chart;
-          diagramRef.current.innerHTML = "";
-          diagramRef.current.appendChild(pre);
-        }
+        const errorHtml = `<pre class="p-4 overflow-auto text-destructive bg-destructive/10 rounded">${escapeHtml(chart)}</pre>`;
+        setSvgContent(errorHtml);
       }
     };
     render();
@@ -202,7 +205,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
         {isFullscreen && (
           <h3 className="font-semibold text-lg">Architecture Blueprint</h3>
         )}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
           {/* Zoom controls */}
           <div className="flex border rounded-lg overflow-hidden bg-card text-card-foreground">
             <Button
@@ -288,6 +291,9 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
             transition: isDragging ? "none" : "transform 0.15s ease-out",
           }}
           className="inline-block p-4"
+          dangerouslySetInnerHTML={
+            svgContent ? { __html: svgContent } : undefined
+          }
         />
       </div>
     </div>
