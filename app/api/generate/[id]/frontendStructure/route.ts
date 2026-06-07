@@ -142,9 +142,6 @@ Generate a complete frontend architecture for this backend system.`),
       userApiKeys.openaiApiKey,
     );
 
-    // @ts-expect-error id is added to the session in the session callback
-    userGenerationsTotal.inc({ user_id: session.user.id });
-
     let content: string;
     if (typeof response.content === "string") {
       content = response.content;
