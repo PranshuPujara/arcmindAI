@@ -101,6 +101,16 @@ export const otpRateLimit = redis
       limit: async (key: string) => checkInMemoryLimit(key, 1, 60000),
     } as unknown as Ratelimit);
 
+export const signupRateLimitIP = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, "1 h"), // 3 signups per IP per hour
+      analytics: true,
+    })
+  : ({
+      limit: async (key: string) => checkInMemoryLimit(key, 3, 3600000),
+    } as unknown as Ratelimit);
+
 export const loginRateLimitIP = redis
   ? new Ratelimit({
       redis,
