@@ -1,6 +1,7 @@
 "use client";
 
 import { useDiagram } from "@/lib/contexts/DiagramContext";
+import { analyzeDiagramRelations } from "@/lib/utils/diagram-analyzer";
 import {
   DiagramLayer,
   DiagramLink,
@@ -10,7 +11,7 @@ import {
 } from "@/types/diagram";
 import * as d3 from "d3";
 import { Maximize, Minus, Plus } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type NodeSelection = d3.Selection<SVGGElement, DiagramNode, null, undefined>;
 
@@ -220,6 +221,16 @@ export default function InteractiveDiagram({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const { isD3Enabled } = useDiagram();
 
+  const selectedIdRef = useRef<string | null>(null);
+  const relations = useMemo(
+    () => (systemGraph ? analyzeDiagramRelations(systemGraph) : {}),
+    [systemGraph],
+  );
+  const getLinkOpacity = (d: DiagramLink) =>
+    d.type === "fallback" ? 0.25 : 0.4;
+  const getLinkDashArray = (d: DiagramLink) =>
+    d.type === "async" ? "6 4" : null;
+
   // Use ResizeObserver to keep track of the container's dimensions
   useEffect(() => {
     if (!containerRef.current) return;
@@ -367,7 +378,7 @@ export default function InteractiveDiagram({
       .enter()
       .append("line")
       .attr("stroke", "currentColor")
-      .attr("stroke-opacity", (d) => (d.type === "fallback" ? 0.25 : 0.4))
+      .attr("stroke-opacity", (d) => getLinkOpacity(d))
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", (d) => (d.type === "async" ? "6 4" : null));
 
@@ -396,6 +407,63 @@ export default function InteractiveDiagram({
         .attr("dominant-baseline", "central")
         .attr("fill", "currentColor")
         .attr("pointer-events", "none");
+    });
+
+    const applyHighlight = (selectedId: string | null) => {
+      if (!selectedId || !relations[selectedId]) {
+        node.style("opacity", 1);
+        link
+          .attr("stroke", "currentColor")
+          .attr("stroke-opacity", (d) => getLinkOpacity(d))
+          .attr("stroke-width", 2)
+          .attr("stroke-dasharray", (d) => getLinkDashArray(d));
+        return;
+      }
+
+      const rel = relations[selectedId];
+      const upstream = new Set<string>([
+        selectedId,
+        ...rel.ancestors.map((n) => n.id),
+      ]);
+      const downstream = new Set<string>([
+        selectedId,
+        ...rel.descendants.map((n) => n.id),
+      ]);
+      const onPath = (s: string, t: string) =>
+        (upstream.has(s) && upstream.has(t)) ||
+        (downstream.has(s) && downstream.has(t));
+
+      node.style("opacity", (d) =>
+        upstream.has(d.id) || downstream.has(d.id) ? 1 : 0.2,
+      );
+
+      link
+        .attr("stroke", (d) =>
+          onPath((d.source as DiagramNode).id, (d.target as DiagramNode).id)
+            ? "var(--primary)"
+            : "currentColor",
+        )
+        .attr("stroke-opacity", (d) =>
+          onPath((d.source as DiagramNode).id, (d.target as DiagramNode).id)
+            ? 0.9
+            : 0.05,
+        )
+        .attr("stroke-width", (d) =>
+          onPath((d.source as DiagramNode).id, (d.target as DiagramNode).id)
+            ? 3
+            : 2,
+        );
+    };
+
+    node.style("cursor", "pointer").on("click", (event, d) => {
+      event.stopPropagation();
+      selectedIdRef.current = d.id;
+      applyHighlight(selectedIdRef.current);
+    });
+
+    svgSel.on("click", () => {
+      selectedIdRef.current = null;
+      applyHighlight(null);
     });
 
     // Initialize the physics engine
@@ -439,6 +507,8 @@ export default function InteractiveDiagram({
       fitToScreen({ padding: 28 });
     });
 
+    applyHighlight(selectedIdRef.current);
+
     // Fit immediately once nodes exist (positions will update quickly)
     const raf = window.requestAnimationFrame(() => {
       fitToScreen({ padding: 28 });
@@ -449,7 +519,7 @@ export default function InteractiveDiagram({
       window.cancelAnimationFrame(raf);
       simulation.stop();
     };
-  }, [dimensions, fitToScreen, systemGraph]);
+  }, [dimensions, fitToScreen, systemGraph, relations]);
 
   const handleZoomIn = () => {
     const svgSel = svgSelectionRef.current;
