@@ -3,8 +3,26 @@
 import { sendMail } from "@/lib/mailer";
 import { contactFormSchema } from "@/lib/validation/contactFormSchema";
 import { getContactEmailTemplate } from "@/components/email-template/contactEmailTemplate";
+import { headers } from "next/headers";
+import { contactRateLimitIP } from "@/lib/rateLimit";
 
 export async function submitContactForm(formData: FormData) {
+  // Get client IP for rate limiting
+  const headerList = await headers();
+  const forwardedFor = headerList.get("x-forwarded-for");
+  const realIp = headerList.get("x-real-ip");
+  const ip =
+    (forwardedFor ? forwardedFor.split(",")[0].trim() : realIp) || "unknown";
+
+  // Check rate limit: 3 requests per IP per hour
+  const { success } = await contactRateLimitIP.limit(`contact:${ip}`);
+  if (!success) {
+    return {
+      success: false,
+      error: "Too many contact form submissions. Please try again in an hour.",
+    };
+  }
+
   const data = {
     firstname: formData.get("firstname") as string,
     lastname: formData.get("lastname") as string,
