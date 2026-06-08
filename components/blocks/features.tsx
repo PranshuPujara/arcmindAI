@@ -182,7 +182,7 @@ const Item = ({ item, isLast, className }: ItemProps) => {
         <div className="image-container relative overflow-hidden">
           <div className="flex flex-col gap-5">
             {/* First row */}
-            <div className="flex justify-center gap-5">
+            <div className="flex translate-x-4 justify-center gap-5">
               {item.images.slice(0, 4).map((image, j) => (
                 <motion.div
                   key={j}
@@ -211,7 +211,7 @@ const Item = ({ item, isLast, className }: ItemProps) => {
               ))}
             </div>
             {/* Second row */}
-            <div className="flex gap-5 justify-center">
+            <div className="flex -translate-x-4 gap-5 justify-center">
               {item.images.slice(4).map((image, j) => (
                 <motion.div
                   key={j}
