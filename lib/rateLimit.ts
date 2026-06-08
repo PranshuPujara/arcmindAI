@@ -130,3 +130,13 @@ export const loginRateLimitAccount = redis
   : ({
       limit: async (key: string) => checkInMemoryLimit(key, 5, 3600000),
     } as unknown as Ratelimit);
+
+export const contactRateLimitIP = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, "1 h"), // 3 contact form submissions per IP per hour
+      analytics: true,
+    })
+  : ({
+      limit: async (key: string) => checkInMemoryLimit(key, 3, 3600000),
+    } as unknown as Ratelimit);
