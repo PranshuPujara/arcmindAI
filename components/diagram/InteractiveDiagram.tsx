@@ -1,14 +1,211 @@
 "use client";
 
 import { useDiagram } from "@/lib/contexts/DiagramContext";
-import { DiagramLink, DiagramNode, SystemGraph } from "@/types/diagram";
+import {
+  DiagramLayer,
+  DiagramLink,
+  DiagramNode,
+  NodeShape,
+  SystemGraph,
+} from "@/types/diagram";
 import * as d3 from "d3";
 import { Maximize, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+type NodeSelection = d3.Selection<SVGGElement, DiagramNode, null, undefined>;
+
 interface InteractiveDiagramProps {
   /** Parsed system graph to render. When null/empty, an empty state is shown. */
   systemGraph?: SystemGraph | null;
+}
+
+/** Visual styling resolved from a node's Mermaid `classDef` declarations. */
+interface NodeStyle {
+  fill: string;
+  stroke: string;
+  strokeWidth: string;
+}
+
+const DEFAULT_FONT_SIZE = 12;
+const DEFAULT_PADDING = 16;
+const DEFAULT_NODE_HEIGHT = DEFAULT_FONT_SIZE * 4;
+const DEFAULT_NODE_STYLE: NodeStyle = {
+  fill: "var(--card)",
+  stroke: "currentColor",
+  strokeWidth: "1.5px",
+};
+
+const DEFAULT_LAYER_COLORS: Record<DiagramLayer, string> = {
+  Frontend: "#3b82f6",
+  API: "#8b5cf6",
+  Database: "#10b981",
+  Infrastructure: "#f59e0b",
+  External: "#ec4899",
+  Unknown: "var(--card)",
+};
+/**
+ * Parse Mermaid-style class declarations such as
+ * `["fill:#ffcc99", "stroke:#333", "stroke-width:2px"]` into concrete SVG
+ * presentation attributes, falling back to theme-aware defaults.
+ */
+function parseNodeStyle(node: DiagramNode): NodeStyle {
+  const style: NodeStyle = { ...DEFAULT_NODE_STYLE };
+  if (DEFAULT_LAYER_COLORS[node.layer]) {
+    style.fill = DEFAULT_LAYER_COLORS[node.layer];
+  }
+
+  const classes = node.classes;
+  classes?.forEach((declaration) => {
+    const [rawKey, ...rest] = declaration.split(":");
+    const key = rawKey?.trim().toLowerCase();
+    const value = rest?.join(":").trim();
+    if (!key || !value) return;
+
+    if (key === "fill") style.fill = value;
+    else if (key === "stroke") style.stroke = value;
+    else if (key === "stroke-width") style.strokeWidth = value;
+  });
+
+  return style;
+}
+
+/** Estimate the rendered width of a node from its label length. */
+function nodeWidth(node: DiagramNode): number {
+  const length = node.label?.length ?? 0;
+  return Math.max(90, (length * DEFAULT_FONT_SIZE) / 2 + DEFAULT_PADDING * 2);
+}
+
+/** Apply resolved fill/stroke attributes to a shape element. */
+function applyStyle<E extends d3.BaseType>(
+  shape: d3.Selection<E, DiagramNode, null, undefined>,
+  style: NodeStyle,
+): d3.Selection<E, DiagramNode, null, undefined> {
+  return shape
+    .attr("fill", style.fill)
+    .attr("stroke", style.stroke)
+    .attr("stroke-width", style.strokeWidth);
+}
+
+/**
+ * Render the SVG geometry for a node's shape,
+ * applying the resolved `classDef` styling to each shape primitive.
+ */
+function drawNodeShape(
+  group: NodeSelection,
+  shape: NodeShape,
+  w: number,
+  h: number,
+  style: NodeStyle,
+): void {
+  const w2 = w / 2;
+  const h2 = h / 2;
+
+  switch (shape) {
+    case "circle": {
+      applyStyle(group.append("circle").attr("r", Math.max(w2, h2)), style);
+      return;
+    }
+
+    case "diamond": {
+      const dw = w2 * 1.4;
+      const dh = h2 * 1.6;
+      applyStyle(
+        group
+          .append("polygon")
+          .attr("points", `0,${-dh} ${dw},0 0,${dh} ${-dw},0`),
+        style,
+      );
+      return;
+    }
+
+    case "hexagon": {
+      const inset = h2;
+      applyStyle(
+        group
+          .append("polygon")
+          .attr(
+            "points",
+            `${-w2 + inset},${-h2} ${w2 - inset},${-h2} ${w2},0 ${w2 - inset},${h2} ${-w2 + inset},${h2} ${-w2},0`,
+          ),
+        style,
+      );
+      return;
+    }
+
+    case "parallelogram": {
+      const skew = h2;
+      applyStyle(
+        group
+          .append("polygon")
+          .attr(
+            "points",
+            `${-w2 + skew},${-h2} ${w2 + skew},${-h2} ${w2 - skew},${h2} ${-w2 - skew},${h2}`,
+          ),
+        style,
+      );
+      return;
+    }
+
+    case "cylinder": {
+      const ry = Math.min(15, h2 * 0.8);
+      const top = -h2 * 1.7 + ry;
+      const bottom = h2 * 1.7 - ry;
+      applyStyle(
+        group
+          .append("path")
+          .attr(
+            "d",
+            [
+              `M ${-w2},${top}`,
+              `A ${w2} ${ry} 0 0 1 ${w2} ${top}`,
+              `L ${w2} ${bottom}`,
+              `A ${w2} ${ry} 0 0 1 ${-w2} ${bottom}`,
+              "Z",
+            ].join(" "),
+          ),
+        style,
+      );
+      // The visible top rim.
+      applyStyle(
+        group
+          .append("path")
+          .attr("d", `M ${-w2},${top} A ${w2} ${ry} 0 0 0 ${w2} ${top}`),
+        style,
+      ).attr("fill", "none");
+      return;
+    }
+
+    case "stadium": {
+      applyStyle(
+        group
+          .append("rect")
+          .attr("x", -w2)
+          .attr("y", -h2)
+          .attr("width", w)
+          .attr("height", h)
+          .attr("rx", h2)
+          .attr("ry", h2),
+        style,
+      );
+      return;
+    }
+
+    case "rectangle":
+    default: {
+      applyStyle(
+        group
+          .append("rect")
+          .attr("x", -w2)
+          .attr("y", -h2)
+          .attr("width", w)
+          .attr("height", h)
+          .attr("rx", 6)
+          .attr("ry", 6),
+        style,
+      );
+      return;
+    }
+  }
 }
 
 /**
@@ -162,7 +359,6 @@ export default function InteractiveDiagram({
     const nodes: DiagramNode[] = systemGraph.nodes.map((n) => ({ ...n }));
     // parseMermaidToJSON already guarantees that the source and target exist in nodes.
     const links: DiagramLink[] = systemGraph.links.map((l) => ({ ...l }));
-    console.log(nodes, links);
     const g = gZoom.append("g").attr("class", "d3-diagram");
 
     const link = g
@@ -178,15 +374,29 @@ export default function InteractiveDiagram({
     const node = g
       .append("g")
       .attr("class", "d3-nodes")
-      .selectAll("g")
+      .selectAll<SVGGElement, DiagramNode>("g")
       .data(nodes)
       .enter()
-      .append("text")
-      .text((d) => d.label)
-      .attr("font-size", 12)
-      .attr("text-anchor", "middle")
-      .attr("dy", 35)
-      .attr("fill", "currentColor");
+      .append("g")
+      .attr("class", "d3-node");
+
+    node.each((d, i, groups) => {
+      const group = d3.select<SVGGElement, DiagramNode>(
+        groups[i] as SVGGElement,
+      );
+      const style = parseNodeStyle(d);
+
+      drawNodeShape(group, d.shape, nodeWidth(d), DEFAULT_NODE_HEIGHT, style);
+
+      group
+        .append("text")
+        .text(d.label)
+        .attr("font-size", DEFAULT_FONT_SIZE)
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "central")
+        .attr("fill", "currentColor")
+        .attr("pointer-events", "none");
+    });
 
     // Initialize the physics engine
     const simulation = d3
@@ -199,7 +409,10 @@ export default function InteractiveDiagram({
           .distance(150),
       )
       .force("charge", d3.forceManyBody().strength(-1000))
-      .force("collision", d3.forceCollide(60))
+      .force(
+        "collision",
+        d3.forceCollide<DiagramNode>((d) => nodeWidth(d) / 2 + DEFAULT_PADDING),
+      )
       .force(
         "center",
         d3.forceCenter(dimensions.width / 2, dimensions.height / 2),
