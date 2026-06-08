@@ -1,40 +1,39 @@
 "use client";
-import ExportPDFButton from "./ExportPDFButton";
+import InteractiveDiagram from "@/components/diagram/InteractiveDiagram";
 
 import animationData from "@/components/loaderLottie.json";
 import { StarterTemplates } from "@/components/prompt";
+import { RateLimitBanner } from "@/components/rate-limit-banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { useState, useRef, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { ArchitectureData } from "../utils/types";
-import { useGenerateSystem } from "../hooks/useGenerateSystem";
 import StarRating from "@/components/ui/star-rating";
-import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { useRateLimitCountdown } from "@/hooks/use-rate-limit-countdown";
+import { useDiagram } from "@/lib/contexts/DiagramContext";
+import { useHistory } from "@/lib/contexts/HistoryContext";
+import { DOC_ROUTES } from "@/lib/routes";
+import Lottie from "lottie-react";
+import { AlertCircle, Lock, RotateCw, Send, Sparkles } from "lucide-react";
 
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Lock } from "lucide-react";
-import { DOC_ROUTES } from "@/lib/routes";
-import GuestSignupPrompt from "./GuestSignupPrompt";
-import { useHistory } from "@/lib/contexts/HistoryContext";
-import Lottie from "lottie-react";
-import { AlertCircle, RotateCw, Send, Sparkles } from "lucide-react";
-import { useRateLimitCountdown } from "@/hooks/use-rate-limit-countdown";
-import { RateLimitBanner } from "@/components/rate-limit-banner";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { useGenerateSystem } from "../hooks/useGenerateSystem";
 import { cleanMermaidString } from "../utils/cleanMermaidString";
+import { ArchitectureData } from "../utils/types";
 
 import ApiRoutesSection from "./ApiRoutesSection";
 import CopyDiagramButton from "./CopyDiagramButton";
 import DatabaseSchemaSection from "./DatabaseSchemaSection";
 import EntitiesSection from "./EntitiesSection";
+import ExportPDFButton from "./ExportPDFButton";
+import GuestSignupPrompt from "./GuestSignupPrompt";
 import InfrastructureSection from "./InfrastructureSection";
 import MermaidDiagram from "./mermaidDiagram";
 import MicroservicesSection from "./MicroservicesSection";
-import InteractiveDiagram from "@/components/diagram/InteractiveDiagram";
-import { useDiagram } from "@/lib/contexts/DiagramContext";
-import { Switch } from "@/components/ui/switch";
 
 const GUEST_GENERATION_STORAGE_KEY = "arcmind.guest.generations.used";
 const GUEST_GENERATION_COOKIE_KEY = "arcmind_guest_generations_used";
@@ -48,6 +47,7 @@ export default function GeneratePage() {
     isLoading,
     error: generateError,
     retryAfter,
+    d3GraphData,
   } = useGenerateSystem(refetch);
 
   const { secondsLeft, totalSeconds, isRateLimited, startCountdown } =
@@ -1040,7 +1040,7 @@ export default function GeneratePage() {
                     Interactive Canvas
                   </h2>
                 </div>
-                <InteractiveDiagram />
+                <InteractiveDiagram systemGraph={d3GraphData} />
               </section>
             )}
           </div>
