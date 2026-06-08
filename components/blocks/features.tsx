@@ -18,8 +18,7 @@ const topItems = [
         height: 186,
       },
     ],
-    className:
-      "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+    className: "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
   },
   {
     title: "Unify your entire tech stack planning.",
@@ -174,7 +173,7 @@ const Item = ({ item, isLast, className }: ItemProps) => {
       whileInView="visible"
       viewport={{ once: true, amount: 0.2 }}
     >
-      <div className="title-container text-balance">
+      <div className="title-container text-center text-balance">
         <h3 className="inline font-semibold">{item.title} </h3>
         <span className="text-muted-foreground"> {item.description}</span>
       </div>
@@ -183,7 +182,7 @@ const Item = ({ item, isLast, className }: ItemProps) => {
         <div className="image-container relative overflow-hidden">
           <div className="flex flex-col gap-5">
             {/* First row */}
-            <div className="flex translate-x-4 justify-end gap-5">
+            <div className="flex translate-x-4 justify-center gap-5">
               {item.images.slice(0, 4).map((image, j) => (
                 <motion.div
                   key={j}
@@ -212,7 +211,7 @@ const Item = ({ item, isLast, className }: ItemProps) => {
               ))}
             </div>
             {/* Second row */}
-            <div className="flex -translate-x-4 gap-5">
+            <div className="flex -translate-x-4 gap-5 justify-center">
               {item.images.slice(4).map((image, j) => (
                 <motion.div
                   key={j}
