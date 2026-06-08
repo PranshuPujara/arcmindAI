@@ -98,3 +98,11 @@ export interface SystemGraph {
     direction: "TD" | "LR";
   };
 }
+
+/**
+ * The node relations among nodes in a graph. Ancestors and descendants describe how nodes are related through paths.
+ */
+export interface NodeRelation {
+  ancestors: DiagramNode[];
+  descendants: DiagramNode[];
+}
