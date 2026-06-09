@@ -1,50 +1,50 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import InteractiveDiagram from "@/components/diagram/InteractiveDiagram";
+import animationData from "@/components/loaderLottie.json";
 import { Button } from "@/components/ui/button";
-import { Code2, Download, Info, Sparkles } from "lucide-react";
-import { useGetGenerationById } from "../hooks/useGetGenerationById";
-import { useDeleteGenerationById } from "../hooks/useDeleteGenerationById";
-import { useUpdateGeneration } from "@/hooks/useUpdateGeneration";
-import { useHistory } from "@/lib/contexts/HistoryContext";
-import { DiagramProvider } from "@/lib/contexts/DiagramContext";
-import { downloadMarkdownFile } from "../utils/generate-markdown";
-import { toast } from "sonner";
+import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-import {
-  MermaidDiagram,
-  CopyDiagramButton,
-  ExportPDFButton,
-  MicroservicesSection,
-  EntitiesSection,
-  ApiRoutesSection,
-  DatabaseSchemaSection,
-  InfrastructureSection,
-  ActionDialog,
-  UpdateResponseCard,
-  AskDoubtCard,
-  ActionButton,
-  DeleteDialog,
-  FrontendStructureDialog,
-  TaskGenerationDialog,
-} from "../components";
-import InteractiveDiagram from "@/components/diagram/InteractiveDiagram";
-import { useDiagram } from "@/lib/contexts/DiagramContext";
-import { Switch } from "@/components/ui/switch";
+import { useUpdateGeneration } from "@/hooks/useUpdateGeneration";
+import { DiagramProvider, useDiagram } from "@/lib/contexts/DiagramContext";
+import { useHistory } from "@/lib/contexts/HistoryContext";
+import { DOC_ROUTES } from "@/lib/routes";
+import { parseMermaidToJSON } from "@/lib/utils/diagram-parser";
 
 import Lottie from "lottie-react";
-import animationData from "@/components/loaderLottie.json";
-import { DOC_ROUTES } from "@/lib/routes";
-import { ArchitectureData } from "../utils/types";
+import { Code2, Download, Info, Sparkles } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import {
+  ActionButton,
+  ActionDialog,
+  ApiRoutesSection,
+  AskDoubtCard,
+  CopyDiagramButton,
+  DatabaseSchemaSection,
+  DeleteDialog,
+  EntitiesSection,
+  ExportPDFButton,
+  FrontendStructureDialog,
+  InfrastructureSection,
+  MermaidDiagram,
+  MicroservicesSection,
+  TaskGenerationDialog,
+  UpdateResponseCard,
+} from "../components";
+import { useDeleteGenerationById } from "../hooks/useDeleteGenerationById";
+import { useGetGenerationById } from "../hooks/useGetGenerationById";
 import { cleanMermaidString } from "../utils/cleanMermaidString";
+import { downloadMarkdownFile } from "../utils/generate-markdown";
+import { ArchitectureData } from "../utils/types";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -87,6 +87,19 @@ function GenerationPageContent() {
   const [responseText, setResponseText] = useState("");
   const [doubtText, setDoubtText] = useState("");
   const mermaidContainerRef = useRef<HTMLDivElement>(null);
+
+  const githubGraphData = useMemo(
+    () =>
+      githubGeneration
+        ? parseMermaidToJSON(cleanMermaidString(githubGeneration))
+        : null,
+    [githubGeneration],
+  );
+
+  const regularGraphData = useMemo(() => {
+    const mermaid = generatedData?.["Architecture Diagram"];
+    return mermaid ? parseMermaidToJSON(cleanMermaidString(mermaid)) : null;
+  }, [generatedData]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -374,7 +387,7 @@ function GenerationPageContent() {
                     Interactive Canvas
                   </h2>
                 </div>
-                <InteractiveDiagram />
+                <InteractiveDiagram systemGraph={githubGraphData} />
               </section>
             )}
           </div>
@@ -636,7 +649,7 @@ function GenerationPageContent() {
                   Interactive Canvas
                 </h2>
               </div>
-              <InteractiveDiagram />
+              <InteractiveDiagram systemGraph={regularGraphData} />
             </section>
           )}
         </div>
